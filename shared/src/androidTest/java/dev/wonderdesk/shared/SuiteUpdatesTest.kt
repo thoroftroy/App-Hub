@@ -29,6 +29,21 @@ class SuiteUpdatesTest {
         assertNull(parseLatestRelease("""{"tag_name":"","assets":[]}"""))
     }
 
+    @Test fun releasesListPicksNewestApkIncludingPrereleases() {
+        val json = """[{"tag_name":"v0.2.12","prerelease":true,"draft":false,"assets":[{"name":"notes.txt","browser_download_url":"https://example.com/n"}]},{"tag_name":"v0.2.11","prerelease":true,"draft":false,"assets":[{"name":"Wonderdesk-App-Hub-v0.2.11-debug.apk","browser_download_url":"https://example.com/a.apk"}]}]"""
+        val rel = parseReleasesList(json)
+        assertNotNull(rel)
+        assertEquals("v0.2.11", rel!!.tag)
+        assertEquals("0.2.11", rel.version)
+    }
+
+    @Test fun releasesListSkipsDrafts() {
+        val json = """[{"tag_name":"v0.3.0","prerelease":false,"draft":true,"assets":[{"name":"x.apk","browser_download_url":"https://example.com/x"}]}]"""
+        assertNull(parseReleasesList(json))
+        assertNull(parseReleasesList("[]"))
+        assertNull(parseReleasesList("not json"))
+    }
+
     @Test fun suiteCatalogCoversAllSuitePackages() {
         val pkgs = SUITE_ENTRIES.map { it.pkg }.toSet()
         assertEquals(19, pkgs.size)

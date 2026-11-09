@@ -1,24 +1,29 @@
 package dev.wonderdesk.shared
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -52,6 +57,8 @@ fun isSuiteApp(app: LaunchableApp): Boolean =
 fun filterManageApps(apps: List<LaunchableApp>, query: String, suiteOnly: Boolean): List<LaunchableApp> =
     apps.filter { it.matches(query) && (!suiteOnly || isSuiteApp(it)) }
 
+private enum class RowKind { UpToDate, UpdateAvailable, NotInstalled, Plain }
+
 @Composable
 fun AppSearchScreen(manage: Boolean = false) {
     val context = LocalContext.current
@@ -60,13 +67,22 @@ fun AppSearchScreen(manage: Boolean = false) {
     var apps by remember { mutableStateOf(listOf<LaunchableApp>()) }
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<LaunchableApp?>(null) }
-    var suiteOnly by rememberSaveable { mutableStateOf(false) }
-    var token by remember { mutableStateOf(loadGithubToken(context)) }
     var releases by remember { mutableStateOf(mapOf<String, SuiteRelease>()) }
     var releaseError by remember { mutableStateOf("") }
+    var daily by remember { mutableStateOf(dailyCheckEnabled(context)) }
+    val installedPkgs = remember(apps) { apps.map { it.component.packageName }.toSet() }
+    val matches = remember(apps, query) { apps.filter { it.matches(query) } }
+    // Suite apps that are not on the phone yet, so they can be installed from here.
+    val rows = remember(matches, query, releases) {
+        if (!manage) matches
+        else filterManageApps(matches, query, true) + missingSuiteEntries(installedPkgs, query)
+            .sortedBy { it.name }
+            .map { LaunchableApp(ComponentName(it.pkg, ""), it.name, null, "unknown") }
+    }
     fun updateStatus(app: LaunchableApp): String? {
+        val installed = app.component.packageName in installedPkgs
         val rel = releases[app.component.packageName]
-        if (app.version == "unknown" && app.component.packageName in SUITE_PKG_SET) {
+        if (!installed && app.component.packageName in SUITE_PKG_SET) {
             return if (rel != null) "Not installed · ${rel.version} available" else "Not installed"
         }
         if (rel == null) return null
@@ -75,38 +91,47 @@ fun AppSearchScreen(manage: Boolean = false) {
             else -> "Up to date (${app.version})"
         }
     }
+    fun rowKind(app: LaunchableApp): RowKind {
+        val installed = app.component.packageName in installedPkgs
+        if (!installed && app.component.packageName in SUITE_PKG_SET) return RowKind.NotInstalled
+        val rel = releases[app.component.packageName] ?: return RowKind.Plain
+        return if (runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false)) RowKind.UpdateAvailable else RowKind.UpToDate
+    }
     fun checkUpdates() {
-        op.run("Checking GitHub releases", {
+        op.run("Checking releases", {
             val found = mutableMapOf<String, SuiteRelease>()
             var failures = 0
-            val t = loadGithubToken(context)
             for (e in SUITE_ENTRIES) {
-                try { found[e.pkg] = fetchLatestRelease(e.repo, t) } catch (_: Exception) { failures++ }
+                try { found[e.pkg] = fetchLatestRelease(e.repo) } catch (_: Exception) { failures++ }
             }
             Pair(found, failures)
         }) { (found, failures) ->
             releases = found
-            releaseError = if (failures > 0) "$failures of ${SUITE_ENTRIES.size} could not be checked (no release yet, offline, or a private repo without a token)." else ""
-            op.notice(if (found.isEmpty()) "No releases found." else "Checked ${found.size} apps" + if (failures > 0) " ($failures failed)." else ".")
+            releaseError = if (failures > 0) "$failures of ${SUITE_ENTRIES.size} could not be checked (no release yet or offline)." else ""
+            val names = found.mapNotNull { (pkg, rel) ->
+                val installed = installedVersion(context, pkg) ?: return@mapNotNull null
+                if (runCatching { compareVersions(rel.version, installed) > 0 }.getOrDefault(false)) SUITE_ENTRIES.find { it.pkg == pkg }?.name else null
+            }
+            if (names.isNotEmpty()) notifyUpdatesAvailable(context, names)
+            op.notice(if (found.isEmpty()) "No releases found." else "Checked ${found.size} apps" + if (failures > 0) " ($failures failed)." else if (names.isEmpty()) ", all up to date." else ".")
         }
     }
     fun fetchAndInstall(app: LaunchableApp) {
         val rel = releases[app.component.packageName] ?: return
-        op.run("Downloading ${rel.apkName}", { downloadApk(context, rel, loadGithubToken(context)) }) { file ->
+        op.run("Downloading ${rel.apkName}", { downloadApk(context, rel) }) { file ->
             op.notice("Downloaded. Android will ask you to confirm the install.")
             try { installApk(context, file) } catch (e: Exception) { op.notice("Could not open the installer: ${e.localizedMessage}") }
             selected = null
         }
     }
-    val matches = remember(apps, query, suiteOnly) { if (manage) filterManageApps(apps, query, suiteOnly) else apps.filter { it.matches(query) } }
-    val installedPkgs = remember(apps) { apps.map { it.component.packageName }.toSet() }
-    // Suite apps that are not on the phone yet, so they can be installed from here too.
-    val rows = remember(matches, query, releases) {
-        if (!manage) matches
-        else matches + missingSuiteEntries(installedPkgs, query)
-            .sortedBy { it.name }
-            .map { LaunchableApp(ComponentName(it.pkg, ""), it.name, null, "unknown") }
+    fun installMissing(app: LaunchableApp) {
+        val entry = SUITE_ENTRIES.find { it.pkg == app.component.packageName } ?: return
+        op.run("Getting ${entry.name} release", { fetchLatestRelease(entry.repo) }) { rel ->
+            releases = releases + (entry.pkg to rel)
+            fetchAndInstall(app.copy(version = "unknown"))
+        }
     }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; op.notice("${it.size} launchable apps. Android may hide other packages.") } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
@@ -114,8 +139,17 @@ fun AppSearchScreen(manage: Boolean = false) {
         refresh()
         onDispose { activity.lifecycle.removeObserver(observer) }
     }
+    if (manage) {
+        LaunchedEffect(Unit) {
+            if (dailyCheckEnabled(context)) scheduleDailyCheck(context)
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            checkUpdates()
+        }
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(query, { query = it.take(512) }, Modifier.fillMaxWidth(), label = { Text(if (manage) "Search installed apps" else "Search apps, aliases or calculate") }, singleLine = true,
+        OutlinedTextField(query, { query = it.take(512) }, Modifier.fillMaxWidth(), label = { Text(if (manage) "Search Wonderdesk apps" else "Search apps, aliases or calculate") }, singleLine = true,
             trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") } })
         if (!manage) {
             val calculation = remember(query) { runCatching { Expression.format(Expression.evaluate(query)) }.getOrNull() }
@@ -124,13 +158,14 @@ fun AppSearchScreen(manage: Boolean = false) {
             }
             if (query.isNotBlank()) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://duckduckgo.com/?q=${Uri.encode(query)}")), op::notice) }) { Text("Search web in browser (sends query)") }
             Text("Only launchable apps and local calculations. Files, private notes and media are not indexed.", style = MaterialTheme.typography.bodySmall)
-        } else Text("Shows installed apps. Check for updates pulls the newest releases from GitHub; Android always asks before installing or uninstalling anything.", style = MaterialTheme.typography.bodySmall)
+        } else Text("Red means not installed, yellow means an update is ready, green means current. Tapping a red app installs it. Android always asks before installing anything.", style = MaterialTheme.typography.bodySmall)
         if (manage) {
-            OutlinedTextField(token, { token = it.take(512) }, Modifier.fillMaxWidth(), label = { Text("GitHub token (only needed if the app repos are private)") }, singleLine = true,
-                trailingIcon = { TextButton(onClick = { saveGithubToken(context, token); op.notice("Token saved on this phone.") }) { Text("Save") } })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { suiteOnly = !suiteOnly }) { Text(if (suiteOnly) "✓ Wonderdesk only" else "Wonderdesk only") }
                 TextButton(onClick = { checkUpdates() }) { Text("Check for updates") }
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
+                    Text("Daily check", Modifier.padding(end = 4.dp), style = MaterialTheme.typography.bodySmall)
+                    Switch(daily, { daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context) })
+                }
             }
             if (releaseError.isNotEmpty()) Text(releaseError, style = MaterialTheme.typography.bodySmall)
         }
@@ -139,13 +174,29 @@ fun AppSearchScreen(manage: Boolean = false) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(if (manage) rows else matches, key = { it.key }) { app ->
                 val status = if (manage) updateStatus(app) else null
-                Card(onClick = { if (manage) selected = app else context.launchApp(app, op::notice) }, modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(48.dp)) }
-                        Column(Modifier.weight(1f)) {
-                            Text(app.title)
-                            Text(if (manage) "${app.version} · ${app.component.packageName}" else app.component.packageName, style = MaterialTheme.typography.bodySmall)
-                            if (status != null) Text(status, style = MaterialTheme.typography.bodySmall)
+                if (!manage) {
+                    Card(onClick = { context.launchApp(app, op::notice) }, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(48.dp)) }
+                            Column(Modifier.weight(1f)) { Text(app.title); Text(app.component.packageName, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
+                } else {
+                    val colors = when (rowKind(app)) {
+                        RowKind.UpToDate -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
+                        RowKind.UpdateAvailable -> CardDefaults.cardColors(containerColor = Color(0xFFFFD54F), contentColor = Color(0xFF3E2F00))
+                        RowKind.NotInstalled -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                        RowKind.Plain -> CardDefaults.cardColors()
+                    }
+                    val installed = app.component.packageName in installedPkgs
+                    Card(onClick = { if (installed) selected = app else installMissing(app) }, modifier = Modifier.fillMaxWidth(), colors = colors) {
+                        Row(Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(48.dp)) }
+                            Column(Modifier.weight(1f)) {
+                                Text(app.title)
+                                Text(if (installed) "${app.version} · ${app.component.packageName}" else app.component.packageName, style = MaterialTheme.typography.bodySmall)
+                                if (status != null) Text(status, style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
