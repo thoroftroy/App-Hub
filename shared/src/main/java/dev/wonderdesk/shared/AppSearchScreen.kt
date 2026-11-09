@@ -61,6 +61,40 @@ fun AppSearchScreen(manage: Boolean = false) {
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<LaunchableApp?>(null) }
     var suiteOnly by rememberSaveable { mutableStateOf(false) }
+    var token by remember { mutableStateOf(loadGithubToken(context)) }
+    var releases by remember { mutableStateOf(mapOf<String, SuiteRelease>()) }
+    var releaseError by remember { mutableStateOf("") }
+    fun updateStatus(app: LaunchableApp): String? {
+        val rel = releases[app.component.packageName] ?: return null
+        return when {
+            app.version == "unknown" -> "Not installed · ${rel.version} available"
+            runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false) -> "Update available: ${app.version} → ${rel.version}"
+            else -> "Up to date (${app.version})"
+        }
+    }
+    fun checkUpdates() {
+        op.run("Checking GitHub releases", {
+            val found = mutableMapOf<String, SuiteRelease>()
+            var failures = 0
+            val t = loadGithubToken(context)
+            for (e in SUITE_ENTRIES) {
+                try { found[e.pkg] = fetchLatestRelease(e.repo, t) } catch (_: Exception) { failures++ }
+            }
+            Pair(found, failures)
+        }) { (found, failures) ->
+            releases = found
+            releaseError = if (failures > 0) "$failures of ${SUITE_ENTRIES.size} could not be checked (no release yet, offline, or a private repo without a token)." else ""
+            op.notice(if (found.isEmpty()) "No releases found." else "Checked ${found.size} apps" + if (failures > 0) " ($failures failed)." else ".")
+        }
+    }
+    fun fetchAndInstall(app: LaunchableApp) {
+        val rel = releases[app.component.packageName] ?: return
+        op.run("Downloading ${rel.apkName}", { downloadApk(context, rel, loadGithubToken(context)) }) { file ->
+            op.notice("Downloaded. Android will ask you to confirm the install.")
+            try { installApk(context, file) } catch (e: Exception) { op.notice("Could not open the installer: ${e.localizedMessage}") }
+            selected = null
+        }
+    }
     val matches = remember(apps, query, suiteOnly) { if (manage) filterManageApps(apps, query, suiteOnly) else apps.filter { it.matches(query) } }
     fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; op.notice("${it.size} launchable apps. Android may hide other packages.") } }
     DisposableEffect(activity) {
@@ -79,18 +113,29 @@ fun AppSearchScreen(manage: Boolean = false) {
             }
             if (query.isNotBlank()) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://duckduckgo.com/?q=${Uri.encode(query)}")), op::notice) }) { Text("Search web in browser (sends query)") }
             Text("Only launchable apps and local calculations. Files, private notes and media are not indexed.", style = MaterialTheme.typography.bodySmall)
-        } else Text("Installed launchable apps only; no store or update service. Android asks before uninstalling anything.", style = MaterialTheme.typography.bodySmall)
+        } else Text("Shows installed apps. Check for updates pulls the newest releases from GitHub; Android always asks before installing or uninstalling anything.", style = MaterialTheme.typography.bodySmall)
         if (manage) {
-            TextButton(onClick = { suiteOnly = !suiteOnly }) { Text(if (suiteOnly) "✓ Wonderdesk only" else "Wonderdesk only") }
+            OutlinedTextField(token, { token = it.take(512) }, Modifier.fillMaxWidth(), label = { Text("GitHub token (only needed if the app repos are private)") }, singleLine = true,
+                trailingIcon = { TextButton(onClick = { saveGithubToken(context, token); op.notice("Token saved on this phone.") }) { Text("Save") } })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { suiteOnly = !suiteOnly }) { Text(if (suiteOnly) "✓ Wonderdesk only" else "Wonderdesk only") }
+                TextButton(onClick = { checkUpdates() }) { Text("Check for updates") }
+            }
+            if (releaseError.isNotEmpty()) Text(releaseError, style = MaterialTheme.typography.bodySmall)
         }
         OperationStatus(op)
         if (query.isNotBlank() && !op.busy) Text("${matches.size} matching apps", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(matches, key = { it.key }) { app ->
+                val status = if (manage) updateStatus(app) else null
                 Card(onClick = { if (manage) selected = app else context.launchApp(app, op::notice) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(48.dp)) }
-                        Column(Modifier.weight(1f)) { Text(app.title); Text(if (manage) "${app.version} · ${app.component.packageName}" else app.component.packageName, style = MaterialTheme.typography.bodySmall) }
+                        Column(Modifier.weight(1f)) {
+                            Text(app.title)
+                            Text(if (manage) "${app.version} · ${app.component.packageName}" else app.component.packageName, style = MaterialTheme.typography.bodySmall)
+                            if (status != null) Text(status, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -101,6 +146,10 @@ fun AppSearchScreen(manage: Boolean = false) {
             Text("${app.component.packageName}\nVersion ${app.version}")
             TextButton(onClick = { context.launchApp(app, op::notice); selected = null }) { Text("Open") }
             TextButton(onClick = { context.launchSafely(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.component.packageName}")), op::notice); selected = null }) { Text("Android app details / permissions") }
+            val rel = releases[app.component.packageName]
+            if (rel != null && (app.version == "unknown" || runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false))) {
+                TextButton(onClick = { fetchAndInstall(app) }) { Text(if (app.version == "unknown") "Install ${rel.version}…" else "Update to ${rel.version}…") }
+            }
             if (app.component.packageName != context.packageName) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.component.packageName}")), op::notice); selected = null }) { Text("Request uninstall…") }
         }
     }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } }) }

@@ -13,9 +13,10 @@ Requires Android 10 or newer (best on Android 13+).
 ## Using App Hub
 
 - Browse your installed launchable apps, or filter to Wonderdesk apps only.
+- Tap Check for updates to pull the newest releases from GitHub. Apps with a newer release show it in the list.
+- Open an app's details and tap Update or Install. The file downloads to the phone, then Android opens its installer and always asks you to confirm. Updates need an internet connection.
+- If the app repos are private, paste a GitHub token in the token field and save it. The token stays on your phone and is only sent to GitHub.
 - Open an app, jump to its Android details and permissions screen, or request an uninstall (Android always asks first).
-
-App Hub is not an app store: it cannot install or update anything itself. Managed suite updates are planned for the future.
 
 ## Look and feel
 
