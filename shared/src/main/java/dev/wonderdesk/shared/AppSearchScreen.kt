@@ -145,6 +145,8 @@ fun AppSearchScreen(manage: Boolean = false) {
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+            var waits = 0
+            while (op.busy && waits < 40) { kotlinx.coroutines.delay(500); waits++ }
             checkUpdates()
         }
     }
