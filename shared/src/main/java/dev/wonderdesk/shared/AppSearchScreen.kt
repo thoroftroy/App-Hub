@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +43,15 @@ fun loadLaunchableApps(context: Context): List<LaunchableApp> {
 
 fun Context.launchApp(app: LaunchableApp, report: (String) -> Unit) = launchSafely(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED), report)
 
+/** Suite filter for the manage view. Includes the installed BlissPlayer music app variants. Pure for testing. */
+fun isSuiteApp(app: LaunchableApp): Boolean =
+    app.component.packageName.startsWith("dev.wonderdesk.") ||
+        app.component.packageName == "com.blissplayer.music" ||
+        app.component.packageName == "com.blissplayer.music.debug"
+
+fun filterManageApps(apps: List<LaunchableApp>, query: String, suiteOnly: Boolean): List<LaunchableApp> =
+    apps.filter { it.matches(query) && (!suiteOnly || isSuiteApp(it)) }
+
 @Composable
 fun AppSearchScreen(manage: Boolean = false) {
     val context = LocalContext.current
@@ -50,7 +60,8 @@ fun AppSearchScreen(manage: Boolean = false) {
     var apps by remember { mutableStateOf(listOf<LaunchableApp>()) }
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<LaunchableApp?>(null) }
-    val matches = remember(apps, query) { apps.filter { it.matches(query) } }
+    var suiteOnly by rememberSaveable { mutableStateOf(false) }
+    val matches = remember(apps, query, suiteOnly) { if (manage) filterManageApps(apps, query, suiteOnly) else apps.filter { it.matches(query) } }
     fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; op.notice("${it.size} launchable apps. Android may hide other packages.") } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
@@ -69,6 +80,9 @@ fun AppSearchScreen(manage: Boolean = false) {
             if (query.isNotBlank()) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://duckduckgo.com/?q=${Uri.encode(query)}")), op::notice) }) { Text("Search web in browser (sends query)") }
             Text("Only launchable apps and local calculations. Files, private notes and media are not indexed.", style = MaterialTheme.typography.bodySmall)
         } else Text("Installed launchable apps only; no store or update service. Android asks before uninstalling anything.", style = MaterialTheme.typography.bodySmall)
+        if (manage) {
+            TextButton(onClick = { suiteOnly = !suiteOnly }) { Text(if (suiteOnly) "✓ Wonderdesk only" else "Wonderdesk only") }
+        }
         OperationStatus(op)
         if (query.isNotBlank() && !op.busy) Text("${matches.size} matching apps", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

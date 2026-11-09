@@ -16,4 +16,13 @@ class AppSearchTest {
         assertFalse(app.matches("no such app"))
         assertTrue(app.matches("   "))
     }
+    @Test fun suiteFilterKeepsWonderdeskAndInstalledMusicApp() {
+        fun app(packageName: String) = LaunchableApp(ComponentName(packageName, "MainActivity"), packageName, null, "1")
+        val mine = app("dev.wonderdesk.abacus")
+        val music = app("com.blissplayer.music.debug")
+        val other = app("com.android.chrome")
+        assertEquals(listOf(mine, music), filterManageApps(listOf(mine, other, music), "", true))
+        assertEquals(listOf(mine, other, music), filterManageApps(listOf(mine, other, music), "", false))
+        assertTrue(filterManageApps(listOf(other), "chrome", true).isEmpty())
+    }
 }
