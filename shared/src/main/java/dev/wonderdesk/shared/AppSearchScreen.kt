@@ -65,9 +65,12 @@ fun AppSearchScreen(manage: Boolean = false) {
     var releases by remember { mutableStateOf(mapOf<String, SuiteRelease>()) }
     var releaseError by remember { mutableStateOf("") }
     fun updateStatus(app: LaunchableApp): String? {
-        val rel = releases[app.component.packageName] ?: return null
+        val rel = releases[app.component.packageName]
+        if (app.version == "unknown" && app.component.packageName in SUITE_PKG_SET) {
+            return if (rel != null) "Not installed · ${rel.version} available" else "Not installed"
+        }
+        if (rel == null) return null
         return when {
-            app.version == "unknown" -> "Not installed · ${rel.version} available"
             runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false) -> "Update available: ${app.version} → ${rel.version}"
             else -> "Up to date (${app.version})"
         }
@@ -96,6 +99,14 @@ fun AppSearchScreen(manage: Boolean = false) {
         }
     }
     val matches = remember(apps, query, suiteOnly) { if (manage) filterManageApps(apps, query, suiteOnly) else apps.filter { it.matches(query) } }
+    val installedPkgs = remember(apps) { apps.map { it.component.packageName }.toSet() }
+    // Suite apps that are not on the phone yet, so they can be installed from here too.
+    val rows = remember(matches, query, releases) {
+        if (!manage) matches
+        else matches + missingSuiteEntries(installedPkgs, query)
+            .sortedBy { it.name }
+            .map { LaunchableApp(ComponentName(it.pkg, ""), it.name, null, "unknown") }
+    }
     fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; op.notice("${it.size} launchable apps. Android may hide other packages.") } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
@@ -124,9 +135,9 @@ fun AppSearchScreen(manage: Boolean = false) {
             if (releaseError.isNotEmpty()) Text(releaseError, style = MaterialTheme.typography.bodySmall)
         }
         OperationStatus(op)
-        if (query.isNotBlank() && !op.busy) Text("${matches.size} matching apps", style = MaterialTheme.typography.bodySmall)
+        if (query.isNotBlank() && !op.busy) Text("${(if (manage) rows else matches).size} matching apps", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(matches, key = { it.key }) { app ->
+            items(if (manage) rows else matches, key = { it.key }) { app ->
                 val status = if (manage) updateStatus(app) else null
                 Card(onClick = { if (manage) selected = app else context.launchApp(app, op::notice) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -143,14 +154,15 @@ fun AppSearchScreen(manage: Boolean = false) {
     }
     selected?.let { app -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(app.title) }, text = {
         Column {
-            Text("${app.component.packageName}\nVersion ${app.version}")
-            TextButton(onClick = { context.launchApp(app, op::notice); selected = null }) { Text("Open") }
-            TextButton(onClick = { context.launchSafely(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.component.packageName}")), op::notice); selected = null }) { Text("Android app details / permissions") }
+            val isInstalled = app.component.packageName in installedPkgs
+            Text(if (isInstalled) "${app.component.packageName}\nVersion ${app.version}" else "${app.component.packageName}\nNot installed on this phone")
+            if (isInstalled) TextButton(onClick = { context.launchApp(app, op::notice); selected = null }) { Text("Open") }
+            if (isInstalled) TextButton(onClick = { context.launchSafely(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.component.packageName}")), op::notice); selected = null }) { Text("Android app details / permissions") }
             val rel = releases[app.component.packageName]
-            if (rel != null && (app.version == "unknown" || runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false))) {
-                TextButton(onClick = { fetchAndInstall(app) }) { Text(if (app.version == "unknown") "Install ${rel.version}…" else "Update to ${rel.version}…") }
+            if (rel != null && (!isInstalled || runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false))) {
+                TextButton(onClick = { fetchAndInstall(app) }) { Text(if (isInstalled) "Update to ${rel.version}…" else "Install ${rel.version}…") }
             }
-            if (app.component.packageName != context.packageName) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.component.packageName}")), op::notice); selected = null }) { Text("Request uninstall…") }
+            if (isInstalled && app.component.packageName != context.packageName) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.component.packageName}")), op::notice); selected = null }) { Text("Request uninstall…") }
         }
     }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } }) }
 }

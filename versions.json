@@ -27,7 +27,7 @@
     "scrapbook": "0.2.0",
     "workshop": "0.2.0",
     "printshop": "0.2.0",
-    "app-hub": "0.2.11",
+    "app-hub": "0.2.12",
     "welcome": "0.2.0",
     "guidebook": "0.2.0",
     "checkup": "0.2.0",
@@ -38,4 +38,4 @@
     "installer": "0.2.2",
     "lab-manager": "0.2.2"
   }
-}\n
+}

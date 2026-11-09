@@ -36,4 +36,14 @@ class SuiteUpdatesTest {
         assertTrue(pkgs.contains("dev.wonderdesk.apphub"))
         assertTrue(pkgs.contains("dev.wonderdesk.launcher"))
     }
+
+    @Test fun missingEntriesAreQueryableAndExcludeInstalled() {
+        val installed = setOf("dev.wonderdesk.abacus", "dev.wonderdesk.apphub")
+        val missing = missingSuiteEntries(installed, "")
+        assertEquals(16, missing.size)
+        assertTrue(missing.none { it.pkg in installed })
+        assertEquals(listOf("Beacon"), missingSuiteEntries(installed, "bea").map { it.name })
+        assertTrue(missingSuiteEntries(installed, "no such app").isEmpty())
+        assertEquals(18, missingSuiteEntries(emptySet(), "").size)
+    }
 }

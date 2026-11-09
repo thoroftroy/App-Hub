@@ -35,6 +35,12 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Wayfinder", "dev.wonderdesk.wayfinder", "Wayfinder"),
 )
 
+val SUITE_PKG_SET = SUITE_ENTRIES.map { it.pkg }.toSet()
+
+/** Suite entries not on the phone whose name matches the query. Pure for testing. */
+fun missingSuiteEntries(installedPkgs: Set<String>, query: String): List<SuiteEntry> =
+    SUITE_ENTRIES.filter { e -> e.pkg !in installedPkgs && e.name.contains(query.trim(), ignoreCase = true) }
+
 /** The newest published release that carries an APK, or null when the JSON has none. Pure for testing. */
 data class SuiteRelease(val tag: String, val version: String, val apkName: String, val apkUrl: String)
 
