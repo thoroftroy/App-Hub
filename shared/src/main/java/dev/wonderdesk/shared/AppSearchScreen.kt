@@ -24,7 +24,10 @@ import androidx.lifecycle.LifecycleEventObserver
 
 data class LaunchableApp(val component: ComponentName, val title: String, val icon: Bitmap?, val version: String, val aliases: List<String> = emptyList()) {
     val key: String get() = component.flattenToString()
-    fun matches(query: String): Boolean = title.contains(query, true) || component.packageName.contains(query, true) || aliases.any { it.contains(query, true) }
+    fun matches(query: String): Boolean {
+        val term = query.trim()
+        return title.contains(term, true) || component.packageName.contains(term, true) || aliases.any { it.contains(term, true) }
+    }
 }
 
 @Suppress("DEPRECATION")
@@ -47,6 +50,7 @@ fun AppSearchScreen(manage: Boolean = false) {
     var apps by remember { mutableStateOf(listOf<LaunchableApp>()) }
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<LaunchableApp?>(null) }
+    val matches = remember(apps, query) { apps.filter { it.matches(query) } }
     fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; op.notice("${it.size} launchable apps. Android may hide other packages.") } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
@@ -55,7 +59,8 @@ fun AppSearchScreen(manage: Boolean = false) {
         onDispose { activity.lifecycle.removeObserver(observer) }
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(query, { query = it.take(512) }, Modifier.fillMaxWidth(), label = { Text(if (manage) "Search installed apps" else "Search apps, aliases or calculate") }, singleLine = true)
+        OutlinedTextField(query, { query = it.take(512) }, Modifier.fillMaxWidth(), label = { Text(if (manage) "Search installed apps" else "Search apps, aliases or calculate") }, singleLine = true,
+            trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("Clear") } })
         if (!manage) {
             val calculation = remember(query) { runCatching { Expression.format(Expression.evaluate(query)) }.getOrNull() }
             if (calculation != null) Card(Modifier.fillMaxWidth()) {
@@ -65,8 +70,9 @@ fun AppSearchScreen(manage: Boolean = false) {
             Text("Only launchable apps and local calculations. Files, private notes and media are not indexed.", style = MaterialTheme.typography.bodySmall)
         } else Text("Installed launchable apps only; no store or update service. Android asks before uninstalling anything.", style = MaterialTheme.typography.bodySmall)
         OperationStatus(op)
+        if (query.isNotBlank() && !op.busy) Text("${matches.size} matching apps", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(apps.filter { it.matches(query) }, key = { it.key }) { app ->
+            items(matches, key = { it.key }) { app ->
                 Card(onClick = { if (manage) selected = app else context.launchApp(app, op::notice) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(48.dp)) }
