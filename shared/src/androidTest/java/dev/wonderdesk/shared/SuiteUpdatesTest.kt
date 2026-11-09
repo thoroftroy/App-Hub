@@ -31,19 +31,20 @@ class SuiteUpdatesTest {
 
     @Test fun suiteCatalogCoversAllSuitePackages() {
         val pkgs = SUITE_ENTRIES.map { it.pkg }.toSet()
-        assertEquals(18, pkgs.size)
-        assertTrue(pkgs.all { it.startsWith("dev.wonderdesk.") })
+        assertEquals(19, pkgs.size)
+        assertTrue(pkgs.all { it.startsWith("dev.wonderdesk.") || it == "com.blissplayer.music.debug" })
         assertTrue(pkgs.contains("dev.wonderdesk.apphub"))
         assertTrue(pkgs.contains("dev.wonderdesk.launcher"))
+        assertTrue(pkgs.contains("com.blissplayer.music.debug"))
     }
 
     @Test fun missingEntriesAreQueryableAndExcludeInstalled() {
         val installed = setOf("dev.wonderdesk.abacus", "dev.wonderdesk.apphub")
         val missing = missingSuiteEntries(installed, "")
-        assertEquals(16, missing.size)
+        assertEquals(17, missing.size)
         assertTrue(missing.none { it.pkg in installed })
         assertEquals(listOf("Beacon"), missingSuiteEntries(installed, "bea").map { it.name })
         assertTrue(missingSuiteEntries(installed, "no such app").isEmpty())
-        assertEquals(18, missingSuiteEntries(emptySet(), "").size)
+        assertEquals(19, missingSuiteEntries(emptySet(), "").size)
     }
 }

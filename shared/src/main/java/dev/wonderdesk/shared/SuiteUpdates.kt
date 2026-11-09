@@ -18,6 +18,7 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Abacus", "dev.wonderdesk.abacus", "Abacus"),
     SuiteEntry("App Hub", "dev.wonderdesk.apphub", "App-Hub"),
     SuiteEntry("Beacon", "dev.wonderdesk.beacon", "Beacon"),
+    SuiteEntry("Bliss Player", "com.blissplayer.music.debug", "BlissPlayer"),
     SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle"),
     SuiteEntry("Cinema", "dev.wonderdesk.cinema", "Cinema"),
     SuiteEntry("Control Room", "dev.wonderdesk.controlroom", "Control-Room"),
