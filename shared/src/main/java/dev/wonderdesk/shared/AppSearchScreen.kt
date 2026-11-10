@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -152,7 +153,33 @@ fun AppSearchScreen(manage: Boolean = false) {
         }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it } }
+    var pendingBatch by remember { mutableStateOf(listOf<Pair<LaunchableApp, File>>()) }
+    var batchIndex by remember { mutableStateOf(0) }
+    fun installNextInBatch() {
+        val batch = pendingBatch
+        if (batch.isEmpty() || batchIndex >= batch.size) { pendingBatch = emptyList(); batchIndex = 0; return }
+        val (app, file) = batch[batchIndex]
+        op.notice("${batchIndex + 1} of ${batch.size}: Android will ask you to confirm ${app.title}.")
+        try { installApk(context, file); batchIndex++ } catch (e: Exception) { op.notice("Could not open the installer for ${app.title}: ${e.localizedMessage}") }
+    }
+    fun updateAllApps() {
+        val outdated = rows.filter { rowKind(it) == RowKind.UpdateAvailable }
+        if (outdated.isEmpty()) { op.notice("Nothing to update. Everything is current."); return }
+        op.run("Downloading ${outdated.size} update${if (outdated.size == 1) "" else "s"}", {
+            val downloaded = mutableListOf<Pair<LaunchableApp, File>>()
+            for (app in outdated) {
+                val rel = releases[app.component.packageName]
+                if (rel != null) downloaded.add(app to downloadApk(context, rel))
+            }
+            downloaded
+        }) { downloaded ->
+            if (downloaded.isEmpty()) { op.notice("Nothing could be downloaded. Check your connection and try again."); return@run }
+            pendingBatch = downloaded
+            batchIndex = 0
+            installNextInBatch()
+        }
+    }
+    fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; installNextInBatch() } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
         activity.lifecycle.addObserver(observer)
@@ -187,6 +214,7 @@ fun AppSearchScreen(manage: Boolean = false) {
         if (manage) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { checkUpdates() }) { Text("Check for updates") }
+                TextButton(onClick = { updateAllApps() }, enabled = rows.any { rowKind(it) == RowKind.UpdateAvailable } && !op.busy) { Text("Update all") }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
                     Text("Daily check", Modifier.padding(end = 4.dp), style = MaterialTheme.typography.bodySmall)
                     Switch(daily, { daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context) })
