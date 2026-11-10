@@ -81,28 +81,50 @@ fun compareVersions(a: String, b: String): Int {
 private fun openConnection(url: String): HttpURLConnection {
     val c = URL(url).openConnection() as HttpURLConnection
     c.connectTimeout = 15_000
-    c.readTimeout = 25_000
-    c.instanceFollowRedirects = true
+    c.readTimeout = 30_000
+    c.instanceFollowRedirects = false
     c.setRequestProperty("User-Agent", "Wonderdesk-App-Hub")
+    c.setRequestProperty("Accept", "*/*")
     return c
 }
 
+/** Reads a URL following redirects manually, retrying throttled answers with backoff. */
 private fun read(url: String): String {
-    val c = openConnection(url)
-    try {
-        val code = c.responseCode
-        if (code !in 200..299) throw IllegalStateException("GitHub answered $code.")
-        return c.inputStream.bufferedReader().use { it.readText() }
-    } finally {
-        c.disconnect()
+    var attempt = 0
+    var last: Exception? = null
+    while (attempt < 3) {
+        var conn: HttpURLConnection? = null
+        try {
+            var current = url
+            for (redirect in 0 until 3) {
+                conn = openConnection(current)
+                val code = conn.responseCode
+                when {
+                    code == 429 || code == 403 -> throw IllegalStateException("GitHub is busy ($code); wait a moment and try again.")
+                    code in 300..399 -> {
+                        val next = conn.getHeaderField("Location") ?: throw IllegalStateException("Redirect without a target.")
+                        conn.disconnect()
+                        current = next
+                    }
+                    code !in 200..299 -> throw IllegalStateException("GitHub answered $code.")
+                    else -> return conn.inputStream.bufferedReader().use { it.readText() }
+                }
+            }
+            throw IllegalStateException("Too many redirects.")
+        } catch (e: Exception) {
+            last = e
+            attempt++
+            try { Thread.sleep(800L * attempt) } catch (_: InterruptedException) {}
+        } finally {
+            conn?.disconnect()
+        }
     }
+    throw IllegalStateException(last?.message ?: "Network failed.")
 }
 
 /** Newest release or pre-release carrying an APK. Throws with a user-readable message on failure. */
 fun fetchLatestRelease(repo: String): SuiteRelease {
-    val t0 = System.currentTimeMillis()
     val xml = read("https://github.com/$SUITE_GITHUB_OWNER/$repo/releases.atom")
-    android.util.Log.d("SuiteUpdates", "atom $repo fetched in ${System.currentTimeMillis() - t0}ms len=${xml.length}")
     return parseAtomFeed(xml, repo) ?: throw IllegalStateException("No releases found for $repo yet.")
 }
 
@@ -113,55 +135,53 @@ fun installedVersion(context: Context, pkg: String): String? =
 fun downloadApk(context: Context, release: SuiteRelease, onProgress: ((Long, Long) -> Unit)? = null): File {
     val dir = File(context.cacheDir, "updates").apply { mkdirs() }
     val out = File(dir, "${release.apkName}.part")
-    try {
+    var attempt = 0
+    var last: Exception? = null
+    while (attempt < 3) {
         var conn: HttpURLConnection? = null
         try {
-            // GitHub release assets 302-redirect to a signed storage URL; follow
-            // manually so redirects can't silently drop into an unsigned hang.
-            var url = release.apkUrl
-            for (redirect in 0 until 3) {
-                conn = openConnection(url)
-                conn.instanceFollowRedirects = false
-                val code = conn.responseCode
-                if (code in 300..399) {
-                    val next = conn.getHeaderField("Location") ?: throw IllegalStateException("Download redirect had no target.")
-                    conn.disconnect()
-                    url = next
-                    continue
-                }
-                if (code !in 200..299) throw IllegalStateException("Download failed (${code}).")
-                val total = conn.contentLengthLong.coerceAtLeast(0L)
-                onProgress?.invoke(0L, total)
-                conn.inputStream.use { input ->
-                    out.outputStream().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        var copied = 0L
-                        var lastReport = 0L
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            output.write(buffer, 0, read)
-                            copied += read
-                            if (copied - lastReport >= 256 * 1024 || copied == total) {
-                                onProgress?.invoke(copied, total)
-                                lastReport = copied
-                            }
+            out.delete()
+            // Follow the 302 to the signed storage host automatically; each
+            // throttled answer (403/429) is retried with a growing pause.
+            conn = openConnection(release.apkUrl)
+            conn.instanceFollowRedirects = true
+            when (conn.responseCode) {
+                403, 429 -> throw IllegalStateException("GitHub is busy (${conn.responseCode}); waiting a moment and retrying.")
+                !in 200..299 -> throw IllegalStateException("Download failed (${conn.responseCode}).")
+            }
+            val total = conn.contentLengthLong.coerceAtLeast(0L)
+            onProgress?.invoke(0L, total)
+            conn.inputStream.use { input ->
+                out.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var copied = 0L
+                    var lastReport = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        copied += read
+                        if (copied - lastReport >= 256 * 1024 || copied == total) {
+                            onProgress?.invoke(copied, total)
+                            lastReport = copied
                         }
                     }
                 }
-                onProgress?.invoke(out.length(), total)
-                break
             }
+            if (out.length() == 0L) throw IllegalStateException("Downloaded file is empty.")
+            val final = File(dir, release.apkName)
+            if (final.exists()) final.delete()
+            out.renameTo(final)
+            return final
+        } catch (e: Exception) {
+            last = e
+            attempt++
+            if (attempt < 3) try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) {}
         } finally {
             conn?.disconnect()
         }
-        if (out.length() == 0L) throw IllegalStateException("Downloaded file is empty.")
-        val final = File(dir, release.apkName)
-        if (final.exists()) final.delete()
-        out.renameTo(final)
-        return final
-    } catch (e: IllegalStateException) { throw e
-    } catch (e: Exception) { throw IllegalStateException("Download failed: ${e.localizedMessage ?: e.javaClass.simpleName}") }
+    }
+    throw IllegalStateException(last?.message ?: "Download failed after retries.")
 }
 
 /** Hands the APK to Android's installer. Android always asks the user to confirm. */
