@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <queries>
+        <provider android:authorities="dev.wonderdesk.controlroom.appearance" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="*/*" /></intent>
     </queries>

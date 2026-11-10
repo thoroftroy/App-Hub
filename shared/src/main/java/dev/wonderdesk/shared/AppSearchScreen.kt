@@ -135,7 +135,7 @@ fun AppSearchScreen(manage: Boolean = false) {
     fun fetchAndInstall(app: LaunchableApp) {
         val rel = releases[app.component.packageName] ?: return
         op.run("Downloading ${rel.apkName}", { report ->
-            downloadApk(context, rel) { done, total ->
+            downloadApk(context, SUITE_ENTRIES.first { it.pkg == app.component.packageName }, rel) { done, total ->
                 report(if (total > 0) "${(done * 100 / total)}% of ${android.text.format.Formatter.formatShortFileSize(context, total)}" else "${android.text.format.Formatter.formatShortFileSize(context, done)} downloaded")
             }
         }) { file ->
@@ -150,7 +150,7 @@ fun AppSearchScreen(manage: Boolean = false) {
             val rel = fetchLatestRelease(entry.repo)
             cacheRelease(context, entry.pkg, rel)
             report("Downloading ${rel.apkName}")
-            downloadApk(context, rel) { done, total ->
+            downloadApk(context, entry, rel) { done, total ->
                 report(if (total > 0) "${(done * 100 / total)}% of ${android.text.format.Formatter.formatShortFileSize(context, total)}" else "${android.text.format.Formatter.formatShortFileSize(context, done)} downloaded")
             }
         }) { file ->
@@ -178,7 +178,7 @@ fun AppSearchScreen(manage: Boolean = false) {
             for ((index, app) in outdated.withIndex()) {
                 val rel = releases[app.component.packageName]
                 if (rel != null) {
-                    val file = downloadApk(context, rel) { done, total ->
+                    val file = downloadApk(context, SUITE_ENTRIES.first { it.pkg == app.component.packageName }, rel) { done, total ->
                         report(if (total > 0) "App ${index + 1} of ${outdated.size}: ${(done * 100 / total)}% of ${android.text.format.Formatter.formatShortFileSize(context, total)}" else "App ${index + 1} of ${outdated.size}: ${android.text.format.Formatter.formatShortFileSize(context, done)} downloaded")
                     }
                     downloaded.add(app to file)

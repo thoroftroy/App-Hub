@@ -1,18 +1,23 @@
-# App Hub for Android
+# Wonderdesk Apphub
 
-Installs and updates the whole Wonderdesk suite.
+Wonderdesk Apphub installs and updates every Wonderdesk app.
+
+## What it does
+
+- See every Wonderdesk app with its icon and description. Tap **Install**, **Update** or **Get all**.
+- Downloads come straight from each app's GitHub releases. Each file is checked to be the right app before Android asks you to confirm.
+- **Updates** lists everything that's out of date, with **Update all**. Android asks you to confirm each install, and Apphub moves on to the next one when you come back.
+- Optionally checks once a day and notifies you about updates.
+- If an app was installed from a different build, Apphub explains that it needs to be reinstalled rather than failing silently.
 
 ## Install
 
-Install the APK, then open the app. Your phone may ask you to allow unknown sources first. Needs Android 10 or newer.
-## Using App Hub
-
-- Start here. Install this app first and manage everything else from it.
-- It checks for new releases every time you open it, plus once a day with a notification when something is ready. The Daily check switch turns the daily check off and on.
-- Red means not installed, yellow means an update is ready, green means current. Tapping a red app installs it straight away.
-- Open an installed app’s details to open it, see Android details and permissions, or update it. Every install downloads the file first, then Android asks you to confirm.
-- Update checks and downloads need internet. Uninstall goes through Android, which always asks first.
+Download the APK from Releases, open it, and allow installing from that source if your phone asks. Needs Android 10 or newer.
 
 ## Look and feel
 
-Open About in the app to change the theme or motion. Aqua is the default.
+Every Wonderdesk app follows the look you pick in Control Room (Aqua, Bliss, Dark Bliss or Super). You can give this app its own look in its Settings.
+
+## Privacy
+
+Everything stays on your phone. No accounts, ads or tracking.

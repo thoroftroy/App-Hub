@@ -1,5 +1,5 @@
 {
-  "ecosystem": "0.2.22",
+  "ecosystem": "0.3.0",
   "apps": {
     "wayfinder": "0.2.4",
     "packrat": "0.2.5",
@@ -25,7 +25,7 @@
     "scrapbook": "0.2.0",
     "workshop": "0.2.0",
     "printshop": "0.2.0",
-    "app-hub": "0.2.20",
+    "app-hub": "0.3.0",
     "welcome": "0.2.0",
     "guidebook": "0.2.0",
     "checkup": "0.2.0",
