@@ -27,19 +27,19 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Abacus", "dev.wonderdesk.abacus", "Abacus", "Scientific calculator with algebra, graphing and unit conversion"),
     SuiteEntry("Beacon", "dev.wonderdesk.beacon", "Beacon", "Search your apps, contacts, settings and the web from one box"),
     SuiteEntry("Bliss Player", "com.blissplayer.music.debug", "BlissPlayer", "Music player with even loudness, themes and a retro deck", "blissplayer"),
-    SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle", "Calendar with month, agenda and event editing"),
-    SuiteEntry("Cinema", "dev.wonderdesk.cinema", "Cinema", "Video library and player with resume and gestures"),
-    SuiteEntry("Control Room", "dev.wonderdesk.controlroom", "Control-Room", "Quick toggles and every Android setting in one place"),
-    SuiteEntry("Launcher", "dev.wonderdesk.launcher", "Wonderdesk-Launcher", "The Wonderdesk home screen and app drawer"),
-    SuiteEntry("Memories", "dev.wonderdesk.memories", "Memories", "Photo library with albums, timeline and viewer"),
-    SuiteEntry("Packrat", "dev.wonderdesk.packrat", "Packrat", "Open, create and extract ZIP archives"),
-    SuiteEntry("Pages", "dev.wonderdesk.pages", "Pages", "PDF reader with thumbnails, bookmarks and recent files"),
-    SuiteEntry("Pulse", "dev.wonderdesk.pulse", "Pulse", "Live battery, memory, storage and network monitor"),
-    SuiteEntry("Safekeeper", "dev.wonderdesk.safekeeper", "Safekeeper", "Back up folders to verified ZIP files and restore them"),
-    SuiteEntry("Scribble", "dev.wonderdesk.scribble", "Scribble", "Notes with folders, search, checklists and pinning"),
-    SuiteEntry("Timepiece", "dev.wonderdesk.timepiece", "Timepiece", "World clock, alarms, stopwatch and timers"),
-    SuiteEntry("Vault", "dev.wonderdesk.vault", "Vault", "Encrypted password manager with a generator"),
-    SuiteEntry("Wayfinder", "dev.wonderdesk.wayfinder", "Wayfinder", "File manager with copy, move, search and sharing"),
+    SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle", "Calendar with tasks, reminders, widgets and Google sync"),
+    SuiteEntry("Cinema", "dev.wonderdesk.cinema", "Cinema", "Video player and editor for every video on your phone"),
+    SuiteEntry("Control Room", "dev.wonderdesk.controlroom", "Control-Room", "Quick controls, every setting and the suite-wide look"),
+    SuiteEntry("Launcher", "dev.wonderdesk.launcher", "Wonderdesk-Launcher", "An Aqua home screen with Dock, Launchpad and widgets"),
+    SuiteEntry("Memories", "dev.wonderdesk.memories", "Memories", "Every photo and video, with albums and a full editor"),
+    SuiteEntry("Packrat", "dev.wonderdesk.packrat", "Packrat", "Open, browse, extract and create archives"),
+    SuiteEntry("Pages", "dev.wonderdesk.pages", "Pages", "PDF reader with highlights, notes and PDF making"),
+    SuiteEntry("Pulse", "dev.wonderdesk.pulse", "Pulse", "Live graphs, device details and app usage"),
+    SuiteEntry("Safekeeper", "dev.wonderdesk.safekeeper", "Safekeeper", "Automatic snapshots and verified backups"),
+    SuiteEntry("Scribble", "dev.wonderdesk.scribble", "Scribble", "Markdown notes, linked pages and sketches"),
+    SuiteEntry("Timepiece", "dev.wonderdesk.timepiece", "Timepiece", "Alarms, timers, stopwatches and world clock"),
+    SuiteEntry("Vault", "dev.wonderdesk.vault", "Vault", "Encrypted passwords with autofill and 2FA codes"),
+    SuiteEntry("Wayfinder", "dev.wonderdesk.wayfinder", "Wayfinder", "Every file, network shares, USB drives and a safe folder"),
     SuiteEntry("Wonderdesk Apphub", "dev.wonderdesk.apphub", "App-Hub", "Install and update every Wonderdesk app", "apphub"),
 )
 
@@ -50,7 +50,17 @@ fun missingSuiteEntries(installedPkgs: Set<String>, query: String): List<SuiteEn
     SUITE_ENTRIES.filter { e -> e.pkg !in installedPkgs && e.name.contains(query.trim(), ignoreCase = true) }
 
 /** A published release. [apkUrl] is a best guess until [resolveApkUrl] reads the real asset list. */
-data class SuiteRelease(val tag: String, val version: String, val apkName: String, val apkUrl: String)
+data class SuiteRelease(
+    val tag: String, val version: String, val apkName: String, val apkUrl: String,
+    /** Plain-text notes for this release ("• " bullets, "# " headings). */
+    val notes: String = "",
+    /** Older releases, newest first: version to notes. */
+    val history: List<Pair<String, String>> = emptyList(),
+) {
+    /** Notes for every version newer than [installed], newest first. */
+    fun notesSince(installed: String?): List<Pair<String, String>> =
+        (listOf(version to notes) + history).filter { installed == null || compareVersions(it.first, installed) > 0 }.filter { it.second.isNotBlank() }
+}
 
 /** Newest release or pre-release tag from the releases atom feed. */
 private val ATOM_ENTRY = Pattern.compile("<entry>.*?<id>tag:github\\.com,2008:Repository/[^<]*/(v[0-9][^<]*)</id>.*?<title>([^<]*)</title>", Pattern.DOTALL)
@@ -63,14 +73,38 @@ fun guessedApkName(repo: String, version: String): String = when {
     else -> "Wonderdesk-$repo-v$version-debug.apk"
 }
 
-/** GitHub's atom feed has no API rate limit, unlike the JSON API. Pure for testing. */
+private val ATOM_FULL_ENTRY = Pattern.compile("<entry>(.*?)</entry>", Pattern.DOTALL)
+private val ATOM_TAG = Pattern.compile("<id>tag:github\\.com,2008:Repository/[^<]*/(v[0-9][^<]*)</id>")
+private val ATOM_CONTENT = Pattern.compile("<content[^>]*>(.*?)</content>", Pattern.DOTALL)
+
+/** GitHub's atom feed has no API rate limit, unlike the JSON API, and carries each release's notes. Pure for testing. */
 fun parseAtomFeed(xml: String, repo: String): SuiteRelease? {
-    val m = ATOM_ENTRY.matcher(xml)
-    if (!m.find()) return null
-    val tag = m.group(1) ?: return null
+    val entries = mutableListOf<Pair<String, String>>()
+    val m = ATOM_FULL_ENTRY.matcher(xml)
+    while (m.find()) {
+        val body = m.group(1) ?: continue
+        val t = ATOM_TAG.matcher(body); if (!t.find()) continue
+        val c = ATOM_CONTENT.matcher(body)
+        entries += t.group(1)!! to (if (c.find()) releaseNotesText(c.group(1) ?: "") else "")
+    }
+    if (entries.isEmpty()) return null
+    val (tag, notes) = entries.first()
     val version = tag.removePrefix("v")
     val fileName = guessedApkName(repo, version)
-    return SuiteRelease(tag, version, fileName, "https://github.com/$SUITE_GITHUB_OWNER/$repo/releases/download/$tag/$fileName")
+    return SuiteRelease(tag, version, fileName, "https://github.com/$SUITE_GITHUB_OWNER/$repo/releases/download/$tag/$fileName",
+        notes, entries.drop(1).take(12).map { it.first.removePrefix("v") to it.second })
+}
+
+/** Turns the escaped HTML of a release body into short plain text. Pure for testing. */
+fun releaseNotesText(escaped: String): String {
+    fun unescape(x: String) = x.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+    var h = unescape(escaped)
+    h = h.replace(Regex("(?is)<h[1-6][^>]*>(.*?)</h[1-6]>")) { "\n# " + it.groupValues[1].trim() + "\n" }
+    h = h.replace(Regex("(?is)<li[^>]*>"), "\n• ").replace(Regex("(?is)</li>|</p>|<br\\s*/?>"), "\n")
+    h = unescape(h.replace(Regex("(?s)<[^>]+>"), ""))
+    return h.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        .filterNot { it.startsWith("Debug-signed pre-release") || it.startsWith("Requires Android") || it.trim('-', ' ').isEmpty() }
+        .joinToString("\n")
 }
 
 /** First .apk link on a release's asset list page. Pure for testing. */
@@ -346,14 +380,16 @@ fun cachedRelease(context: Context, pkg: String): SuiteRelease? {
     val raw = prefs(context).getString(CACHE_PREFIX + pkg, null) ?: return null
     return runCatching {
         val j = JSONObject(raw)
-        SuiteRelease(j.getString("tag"), j.getString("version"), j.getString("apkName"), j.getString("apkUrl"))
+        val hist = j.optJSONArray("history")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.getString("v") to o.optString("n") } } } ?: emptyList()
+        SuiteRelease(j.getString("tag"), j.getString("version"), j.getString("apkName"), j.getString("apkUrl"), j.optString("notes"), hist)
     }.getOrNull()
 }
 
 private fun cachedAt(context: Context, pkg: String) = prefs(context).getLong(CACHE_TIME_PREFIX + pkg, 0L)
 
 fun cacheRelease(context: Context, pkg: String, rel: SuiteRelease) {
-    val j = JSONObject().put("tag", rel.tag).put("version", rel.version).put("apkName", rel.apkName).put("apkUrl", rel.apkUrl)
+    val j = JSONObject().put("tag", rel.tag).put("version", rel.version).put("apkName", rel.apkName).put("apkUrl", rel.apkUrl).put("notes", rel.notes)
+        .put("history", org.json.JSONArray(rel.history.map { JSONObject().put("v", it.first).put("n", it.second) }))
     prefs(context).edit().putString(CACHE_PREFIX + pkg, j.toString()).putLong(CACHE_TIME_PREFIX + pkg, System.currentTimeMillis()).apply()
 }
 

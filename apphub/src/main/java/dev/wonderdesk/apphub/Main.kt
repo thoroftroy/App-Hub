@@ -396,7 +396,22 @@ private fun UpdatesTab(updates: List<SuiteEntry>, open: (SuiteEntry) -> Unit) {
                         enabled = updates.any { Hub.jobs[it.pkg] == null })
                 }
             }
-            itemsIndexed(updates, key = { _, e -> "u" + e.pkg }) { i, e -> SuiteRow(e, Modifier.panelItem(i, updates.size)) { open(e) } }
+            itemsIndexed(updates, key = { _, e -> "u" + e.pkg }) { i, e ->
+                Column(Modifier.panelItem(i, updates.size)) {
+                    SuiteRow(e, Modifier) { open(e) }
+                    val notes = Hub.releases[e.pkg]?.notesSince(Hub.installed[e.pkg]).orEmpty()
+                    if (notes.isNotEmpty()) {
+                        var expanded by rememberSaveable(e.pkg) { mutableStateOf(false) }
+                        Column(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(start = 76.dp, end = 14.dp, bottom = 12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("What's new", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = p.accent)
+                                Icon(if (expanded) WonderIcons.ExpandLess else WonderIcons.ExpandMore, null, tint = p.accent, modifier = Modifier.size(18.dp))
+                            }
+                            ReleaseNotes(notes, maxLines = if (expanded) Int.MAX_VALUE else 3, showVersions = expanded && notes.size > 1)
+                        }
+                    }
+                }
+            }
             item { Text("Android asks you to confirm each install. App Hub waits for you, then opens the next one.", Modifier.padding(6.dp, 8.dp),
                 style = MaterialTheme.typography.bodySmall, color = p.secondaryText) }
         }
@@ -435,6 +450,23 @@ private fun DetailPage(e: SuiteEntry, toast: (String) -> Unit) {
             }
         }
         Text(e.tagline, style = MaterialTheme.typography.bodyLarge)
+        rel?.let { r ->
+            val newer = r.notesSince(have)
+            if (have != null && newer.isNotEmpty()) Panel(title = "What's new since $have") {
+                Box(Modifier.padding(14.dp)) { ReleaseNotes(newer, showVersions = newer.size > 1) }
+            } else if (r.notes.isNotBlank()) Panel(title = "What's new in ${r.version}") {
+                Box(Modifier.padding(14.dp)) { ReleaseNotes(listOf(r.version to r.notes), showVersions = false) }
+            }
+            val older = r.history.filter { it.second.isNotBlank() && (have == null || compareVersions(it.first, have) <= 0) }
+            if (older.isNotEmpty()) {
+                var open by rememberSaveable(e.pkg) { mutableStateOf(false) }
+                Panel(title = "Version history") {
+                    ListRow(if (open) "Hide earlier versions" else "Show earlier versions", subtitle = "${older.size} earlier release${if (older.size == 1) "" else "s"}",
+                        icon = WonderIcons.History, tint = Color(0xFF7A7F87), onClick = { open = !open })
+                    if (open) { PanelDivider(0.dp); Box(Modifier.padding(14.dp)) { ReleaseNotes(older, showVersions = true) } }
+                }
+            }
+        }
         Panel(title = "Information") {
             ListRow("Installed", trailing = { Text(have ?: "Not installed", color = p.secondaryText) })
             PanelDivider(12.dp)
@@ -463,3 +495,29 @@ private fun DetailPage(e: SuiteEntry, toast: (String) -> Unit) {
     }
 }
 
+
+/** Release notes as "# heading" and "• bullet" lines; [showVersions] puts a version header over each block. */
+@Composable
+private fun ReleaseNotes(blocks: List<Pair<String, String>>, maxLines: Int = Int.MAX_VALUE, showVersions: Boolean) {
+    val p = wonderPalette()
+    var used = 0
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for ((version, text) in blocks) {
+            if (used >= maxLines) break
+            if (showVersions) Text("Version $version", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
+            for (line in text.lines()) {
+                if (used >= maxLines) break
+                used++
+                when {
+                    line.startsWith("# ") -> Text(line.removePrefix("# "), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = p.text)
+                    line.startsWith("• ") -> Row {
+                        Text("•", Modifier.width(14.dp), color = p.accent, style = MaterialTheme.typography.bodyMedium)
+                        Text(line.removePrefix("• "), style = MaterialTheme.typography.bodyMedium, color = p.text)
+                    }
+                    else -> Text(line, style = MaterialTheme.typography.bodyMedium, color = p.secondaryText)
+                }
+            }
+        }
+        if (used >= maxLines && maxLines != Int.MAX_VALUE) Text("…", color = p.secondaryText)
+    }
+}
