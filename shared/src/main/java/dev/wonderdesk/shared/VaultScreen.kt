@@ -81,7 +81,7 @@ fun VaultScreen() {
     LaunchedEffect(Unit) { while (true) { delay(1000); if (store.unlocked && SystemClock.elapsedRealtime() - lastActivity >= 300_000) locked() } }
     LaunchedEffect(clipToken) { if (clipToken != null) { delay(20_000); clearClipboard() } }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) op.run("Exporting encrypted v2 backup", {
+        if (uri != null) op.run("Exporting encrypted v2 backup", { _ ->
             val raw = store.exportEncrypted()
             context.contentResolver.openOutputStream(uri, "w")!!.use { it.write(raw) }
         }) { op.notice("Encrypted backup exported. Keep its master password separately; no plaintext was exported.") }
@@ -152,12 +152,12 @@ fun VaultScreen() {
             if (title.isBlank()) { op.notice("Use a non-empty title"); return@TextButton }
             val next = store.entries(); val entry = JSONObject().put("title", title).put("user", user).put("pw", password)
             if (editIndex < 0) next.put(entry) else next.put(editIndex, entry)
-            op.run("Encrypting and saving credential", { store.save(next) }) { editor = null; revision++; touch(); op.notice("Saved atomically; existing writers are detected.") }
+            op.run("Encrypting and saving credential", { _ -> store.save(next) }) { editor = null; revision++; touch(); op.notice("Saved atomically; existing writers are detected.") }
         }, enabled = !op.busy) { Text("Save") } }, dismissButton = { TextButton(onClick = { editor = null }, enabled = !op.busy) { Text("Cancel") } })
     }
     deleteIndex?.let { index -> AlertDialog(onDismissRequest = { deleteIndex = null }, title = { Text("Delete credential?") }, text = { Text("This removes only the selected entry. Export a backup first if you need recovery.") }, confirmButton = { TextButton(onClick = {
         val next = store.entries(); next.remove(index)
-        op.run("Saving vault without selected entry", { store.save(next) }) { deleteIndex = null; revision++; touch(); op.notice("Credential removed from this vault; older encrypted backups are unchanged.") }
+        op.run("Saving vault without selected entry", { _ -> store.save(next) }) { deleteIndex = null; revision++; touch(); op.notice("Credential removed from this vault; older encrypted backups are unchanged.") }
     }, enabled = !op.busy) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteIndex = null }) { Text("Cancel") } }) }
     if (rotate) AlertDialog(onDismissRequest = { if (!op.busy) rotate = false }, title = { Text("Change master password") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -170,13 +170,13 @@ fun VaultScreen() {
         if (newPassword != repeatPassword) { op.notice("New passwords do not match"); return@TextButton }
         val current = currentPassword; val replacement = newPassword
         currentPassword = ""; newPassword = ""; repeatPassword = ""
-        op.run("Re-authenticating and rotating encryption key", { store.rotate(current, replacement) }) { rotate = false; revision++; touch(); op.notice("Password changed with a fresh salt and key.") }
+        op.run("Re-authenticating and rotating encryption key", { _ -> store.rotate(current, replacement) }) { rotate = false; revision++; touch(); op.notice("Password changed with a fresh salt and key.") }
     }, enabled = !op.busy) { Text("Change password") } }, dismissButton = { TextButton(onClick = { rotate = false; currentPassword = ""; newPassword = ""; repeatPassword = "" }) { Text("Cancel") } })
     incoming?.let { uri -> AlertDialog(onDismissRequest = { incoming = null; incomingPassword = "" }, title = { Text("Import encrypted v2 vault") }, text = {
         Column { Text("Only an empty destination is allowed. Existing credentials are never overwritten. Enter the backup's master password to authenticate it before import."); OutlinedTextField(incomingPassword, { incomingPassword = it }, label = { Text("Backup master password") }, visualTransformation = PasswordVisualTransformation()) }
     }, confirmButton = { TextButton(onClick = {
         val password = incomingPassword; incomingPassword = ""
-        op.run("Authenticating encrypted backup", {
+        op.run("Authenticating encrypted backup", { _ ->
             val raw = context.contentResolver.openInputStream(uri)!!.use { input ->
                 val output = ByteArrayOutputStream(); val buffer = ByteArray(8192)
                 while (true) { val count = input.read(buffer); if (count < 0) break; require(output.size() + count <= EncryptedVault.MAX_BYTES) { "Backup too large" }; output.write(buffer, 0, count) }

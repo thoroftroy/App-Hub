@@ -106,7 +106,7 @@ fun AppSearchScreen(manage: Boolean = false) {
         return if (runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false)) RowKind.UpdateAvailable else RowKind.UpToDate
     }
     fun checkUpdates() {
-        op.run("Checking for updates", {
+        op.run("Checking for updates", { _ ->
             runBlocking {
                 val found = mutableMapOf<String, SuiteRelease>()
                 var failures = 0
@@ -134,7 +134,11 @@ fun AppSearchScreen(manage: Boolean = false) {
     }
     fun fetchAndInstall(app: LaunchableApp) {
         val rel = releases[app.component.packageName] ?: return
-        op.run("Downloading ${rel.apkName}", { downloadApk(context, rel) }) { file ->
+        op.run("Downloading ${rel.apkName}", { report ->
+            downloadApk(context, rel) { done, total ->
+                report(if (total > 0) "${(done * 100 / total)}% of ${android.text.format.Formatter.formatShortFileSize(context, total)}" else "${android.text.format.Formatter.formatShortFileSize(context, done)} downloaded")
+            }
+        }) { file ->
             op.notice("Downloaded. Android will ask you to confirm the install.")
             try { installApk(context, file) } catch (e: Exception) { op.notice("Could not open the installer: ${e.localizedMessage}") }
             selected = null
@@ -142,14 +146,18 @@ fun AppSearchScreen(manage: Boolean = false) {
     }
     fun installMissing(app: LaunchableApp) {
         val entry = SUITE_ENTRIES.find { it.pkg == app.component.packageName } ?: return
-        op.run("Getting ${entry.name} release", { fetchLatestRelease(entry.repo) }) { rel ->
-            releases = releases + (entry.pkg to rel)
+        op.run("Getting ${entry.name}", { report ->
+            val rel = fetchLatestRelease(entry.repo)
             cacheRelease(context, entry.pkg, rel)
-            op.notice("Downloading ${rel.apkName}")
-            op.run("Downloading ${rel.apkName}", { downloadApk(context, rel) }) { file ->
-                op.notice("Downloaded. Android will ask you to confirm the install.")
-                try { installApk(context, file) } catch (e: Exception) { op.notice("Could not open the installer: ${e.localizedMessage}") }
+            report("Downloading ${rel.apkName}")
+            downloadApk(context, rel) { done, total ->
+                report(if (total > 0) "${(done * 100 / total)}% of ${android.text.format.Formatter.formatShortFileSize(context, total)}" else "${android.text.format.Formatter.formatShortFileSize(context, done)} downloaded")
             }
+        }) { file ->
+            releases = releases + (entry.pkg to cachedRelease(context, entry.pkg)!!)
+            op.notice("Downloaded. Android will ask you to confirm the install.")
+            try { installApk(context, file) } catch (e: Exception) { op.notice("Could not open the installer: ${e.localizedMessage}") }
+            selected = null
         }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -165,11 +173,16 @@ fun AppSearchScreen(manage: Boolean = false) {
     fun updateAllApps() {
         val outdated = rows.filter { rowKind(it) == RowKind.UpdateAvailable }
         if (outdated.isEmpty()) { op.notice("Nothing to update. Everything is current."); return }
-        op.run("Downloading ${outdated.size} update${if (outdated.size == 1) "" else "s"}", {
+        op.run("Downloading ${outdated.size} update${if (outdated.size == 1) "" else "s"}", { report ->
             val downloaded = mutableListOf<Pair<LaunchableApp, File>>()
-            for (app in outdated) {
+            for ((index, app) in outdated.withIndex()) {
                 val rel = releases[app.component.packageName]
-                if (rel != null) downloaded.add(app to downloadApk(context, rel))
+                if (rel != null) {
+                    val file = downloadApk(context, rel) { done, total ->
+                        report(if (total > 0) "App ${index + 1} of ${outdated.size}: ${(done * 100 / total)}% of ${android.text.format.Formatter.formatShortFileSize(context, total)}" else "App ${index + 1} of ${outdated.size}: ${android.text.format.Formatter.formatShortFileSize(context, done)} downloaded")
+                    }
+                    downloaded.add(app to file)
+                }
             }
             downloaded
         }) { downloaded ->
@@ -179,7 +192,7 @@ fun AppSearchScreen(manage: Boolean = false) {
             installNextInBatch()
         }
     }
-    fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; installNextInBatch() } }
+    fun refresh() { op.run("Reading launchable installed apps", { _ -> loadLaunchableApps(context) }) { apps = it; installNextInBatch() } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
         activity.lifecycle.addObserver(observer)

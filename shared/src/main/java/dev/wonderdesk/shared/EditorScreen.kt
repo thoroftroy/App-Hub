@@ -35,7 +35,7 @@ fun EditorScreen() {
     val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { value ->
         if (value != null) {
             val exportText = pendingExport
-            op.run("Exporting UTF-8 text to a new document", {
+            op.run("Exporting UTF-8 text to a new document", { _ ->
                 context.contentResolver.openOutputStream(value, "w")!!.use { it.write(exportText.toByteArray(Charsets.UTF_8)) }
             }) { op.notice("New document written. The original source was not overwritten.") }
         }
@@ -77,7 +77,7 @@ fun EditorScreen() {
         AlertDialog(onDismissRequest = { pendingImport = null }, title = { Text("Replace local draft with imported text?") }, text = { Text("Your current draft will be kept as the previous draft. Imports are limited to 1 MiB of valid UTF-8. This will not modify the source file.") }, confirmButton = {
             TextButton(onClick = {
                 pendingImport = null
-                op.run("Reading UTF-8 file", {
+                op.run("Reading UTF-8 file", { _ ->
                     val data = context.contentResolver.openInputStream(uri)!!.use { input ->
                         val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192)
                         while (true) { val n = input.read(buffer); if (n < 0) break; require(output.size() + n <= 1024 * 1024) { "File exceeds 1 MiB" }; output.write(buffer, 0, n) }

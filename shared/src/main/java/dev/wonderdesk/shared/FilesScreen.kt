@@ -52,7 +52,7 @@ fun FilesScreen() {
         val source = pendingCopy
         val dest = result.data?.data
         if (result.resultCode == Activity.RESULT_OK && source != null && dest != null) {
-            op.run("Copying to a new document", {
+            op.run("Copying to a new document", { _ ->
                 try {
                     context.contentResolver.openInputStream(source)!!.use { input ->
                         context.contentResolver.openOutputStream(dest, "w")!!.use { output -> input.copyTo(output) }
@@ -71,7 +71,7 @@ fun FilesScreen() {
         }
     }
     LaunchedEffect(folder?.uri, reload) {
-        if (folder != null) op.run("Reading folder", {
+        if (folder != null) op.run("Reading folder", { _ ->
             require(folder.exists() && folder.canRead()) { "Folder unavailable; choose it again" }
             folder.listFiles().map { FileRow(it, it.name ?: "Unnamed", it.isDirectory, it.length(), context.documentFlags(it.uri)) }
                 .sortedWith(compareBy<FileRow> { !it.folder }.thenBy { it.name.lowercase() })
@@ -135,7 +135,7 @@ fun FilesScreen() {
         TextButton(onClick = {
             val action = edit; val row = selected; val parent = folder; val newName = name.trim()
             edit = null; selected = null
-            op.run("Updating folder", {
+            op.run("Updating folder", { _ ->
                 if (action != "delete") require(newName.isNotBlank() && newName !in listOf(".", "..") && '/' !in newName && '\\' !in newName) { "Use a non-empty name without slashes" }
                 when (action) {
                     "delete" -> check(row!!.file.delete()) { "Provider refused deletion" }

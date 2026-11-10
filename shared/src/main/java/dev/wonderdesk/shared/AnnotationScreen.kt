@@ -40,7 +40,7 @@ fun AnnotationScreen() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { source = it }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
         val snapshot = export
-        if (uri != null && snapshot != null) op.run("Saving annotated PNG copy", {
+        if (uri != null && snapshot != null) op.run("Saving annotated PNG copy", { _ ->
             val result = snapshot.first.copy(Bitmap.Config.ARGB_8888, true)
             val canvas = android.graphics.Canvas(result)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND; strokeWidth = maxOf(3f, result.width / 160f) }
@@ -55,7 +55,7 @@ fun AnnotationScreen() {
         }) { op.notice("New PNG copy saved at ${snapshot.first.width} × ${snapshot.first.height}. Original unchanged."); export = null }
     }
     LaunchedEffect(source) {
-        source?.let { uri -> op.run("Decoding image", { decodeImage(context, uri, 2048) }) { bitmap = it; marks = emptyList(); op.notice("Image opened. Draw with one finger; undo removes the last stroke.") } }
+        source?.let { uri -> op.run("Decoding image", { _ -> decodeImage(context, uri, 2048) }) { bitmap = it; marks = emptyList(); op.notice("Image opened. Draw with one finger; undo removes the last stroke.") } }
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Open an Android screenshot or another image to annotate. Screen capture/recording is not implemented.", style = MaterialTheme.typography.bodySmall)

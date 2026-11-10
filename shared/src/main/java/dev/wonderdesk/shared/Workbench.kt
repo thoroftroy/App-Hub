@@ -198,18 +198,21 @@ fun AppFrame(app: AppInfo, transparentBackground: Boolean = false, content: @Com
 class Operation(private val scope: CoroutineScope) {
     var busy by mutableStateOf(false); private set
     var message by mutableStateOf(""); private set
+    var progress by mutableStateOf(""); private set
     fun notice(text: String) { message = text }
-    fun <T> run(label: String, work: () -> T, done: (T) -> Unit = {}) {
+    fun updateProgress(text: String) { progress = text }
+    fun <T> run(label: String, work: ((String) -> Unit) -> T, done: (T) -> Unit = {}) {
         if (busy) return
         busy = true
+        progress = ""
         message = "$label…"
         scope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { work() }
+                val result = withContext(Dispatchers.IO) { work { p -> progress = p } }
                 done(result)
             } catch (e: CancellationException) { throw e
             } catch (e: Exception) { message = "Could not complete: ${e.localizedMessage ?: e.javaClass.simpleName}. Access may have been revoked; choose the item again." }
-            finally { busy = false }
+            finally { busy = false; progress = "" }
         }
     }
 }
@@ -221,6 +224,7 @@ class Operation(private val scope: CoroutineScope) {
 
 @Composable fun OperationStatus(op: Operation) {
     if (op.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+    if (op.progress.isNotEmpty()) Text(op.progress, style = MaterialTheme.typography.bodySmall)
     if (op.message.isNotEmpty()) Text(op.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall)
 }
 

@@ -100,27 +100,68 @@ private fun read(url: String): String {
 
 /** Newest release or pre-release carrying an APK. Throws with a user-readable message on failure. */
 fun fetchLatestRelease(repo: String): SuiteRelease {
+    val t0 = System.currentTimeMillis()
     val xml = read("https://github.com/$SUITE_GITHUB_OWNER/$repo/releases.atom")
+    android.util.Log.d("SuiteUpdates", "atom $repo fetched in ${System.currentTimeMillis() - t0}ms len=${xml.length}")
     return parseAtomFeed(xml, repo) ?: throw IllegalStateException("No releases found for $repo yet.")
 }
 
 fun installedVersion(context: Context, pkg: String): String? =
     runCatching { context.packageManager.getPackageInfo(pkg, 0).versionName }.getOrNull()
 
-/** Downloads the APK into private cache. Throws with a user-readable message on failure. */
-fun downloadApk(context: Context, release: SuiteRelease): File {
+/** Downloads the APK into private cache with progress callbacks. Throws with a user-readable message on failure. */
+fun downloadApk(context: Context, release: SuiteRelease, onProgress: ((Long, Long) -> Unit)? = null): File {
     val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-    val out = File(dir, release.apkName)
-    val c = openConnection(release.apkUrl)
+    val out = File(dir, "${release.apkName}.part")
     try {
-        c.instanceFollowRedirects = true
-        val code = c.responseCode
-        if (code !in 200..299) throw IllegalStateException("Download failed (${code}).")
-        c.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
+        var conn: HttpURLConnection? = null
+        try {
+            // GitHub release assets 302-redirect to a signed storage URL; follow
+            // manually so redirects can't silently drop into an unsigned hang.
+            var url = release.apkUrl
+            for (redirect in 0 until 3) {
+                conn = openConnection(url)
+                conn.instanceFollowRedirects = false
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val next = conn.getHeaderField("Location") ?: throw IllegalStateException("Download redirect had no target.")
+                    conn.disconnect()
+                    url = next
+                    continue
+                }
+                if (code !in 200..299) throw IllegalStateException("Download failed (${code}).")
+                val total = conn.contentLengthLong.coerceAtLeast(0L)
+                onProgress?.invoke(0L, total)
+                conn.inputStream.use { input ->
+                    out.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var copied = 0L
+                        var lastReport = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            copied += read
+                            if (copied - lastReport >= 256 * 1024 || copied == total) {
+                                onProgress?.invoke(copied, total)
+                                lastReport = copied
+                            }
+                        }
+                    }
+                }
+                onProgress?.invoke(out.length(), total)
+                break
+            }
+        } finally {
+            conn?.disconnect()
+        }
+        if (out.length() == 0L) throw IllegalStateException("Downloaded file is empty.")
+        val final = File(dir, release.apkName)
+        if (final.exists()) final.delete()
+        out.renameTo(final)
+        return final
     } catch (e: IllegalStateException) { throw e
     } catch (e: Exception) { throw IllegalStateException("Download failed: ${e.localizedMessage ?: e.javaClass.simpleName}") }
-    if (out.length() == 0L) throw IllegalStateException("Downloaded file is empty.")
-    return out
 }
 
 /** Hands the APK to Android's installer. Android always asks the user to confirm. */

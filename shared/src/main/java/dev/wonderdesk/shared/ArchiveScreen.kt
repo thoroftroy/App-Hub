@@ -26,7 +26,7 @@ fun ArchiveScreen(backup: Boolean) {
     val select = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { values -> sources = values; op.notice("${values.size} source documents selected; no files copied yet.") }
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { value -> archive = value; value?.let { context.keepRead(it) } }
     val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { value ->
-        if (value != null) op.run("Writing and verifying ZIP", {
+        if (value != null) op.run("Writing and verifying ZIP", { _ ->
             try {
                 ZipEngine.create(context, sources, context.contentResolver.openOutputStream(value, "w")!!)
                 ZipEngine.inspect(context.contentResolver.openInputStream(value)!!)
@@ -38,12 +38,12 @@ fun ArchiveScreen(backup: Boolean) {
     }
     val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { destination ->
         val source = archive
-        if (destination != null && source != null) op.run("Extracting into a new folder and checking each file", { ZipEngine.extract(context, source, destination) }) {
+        if (destination != null && source != null) op.run("Extracting into a new folder and checking each file", { _ -> ZipEngine.extract(context, source, destination) }) {
             op.notice("${it.second} files restored to ${it.first}. SHA-256 read-back checks passed. Existing files were not overwritten.")
         }
     }
     LaunchedEffect(archive) {
-        archive?.let { value -> op.run("Reading ZIP and checking CRCs", { ZipEngine.inspect(context.contentResolver.openInputStream(value)!!) }) {
+        archive?.let { value -> op.run("Reading ZIP and checking CRCs", { _ -> ZipEngine.inspect(context.contentResolver.openInputStream(value)!!) }) {
             entries = it; op.notice("ZIP checked: ${it.size} entries. Choose a destination to ${if (backup) "test restore" else "extract"}.")
         } }
     }

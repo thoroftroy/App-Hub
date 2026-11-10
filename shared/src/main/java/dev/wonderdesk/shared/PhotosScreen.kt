@@ -60,7 +60,7 @@ fun PhotosScreen(library: Boolean) {
         if (library) prefs.edit().putString("uris", JSONArray(values.map { it.uri.toString() }).toString()).apply()
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(100)) { values ->
-        if (values.isNotEmpty()) op.run("Loading selected photo references", {
+        if (values.isNotEmpty()) op.run("Loading selected photo references", { _ ->
             values.map { uri -> context.keepRead(uri); PhotoRef(uri, context.displayName(uri)) }
         }) {
             store(if (library) (photos + it).distinctBy { p -> p.uri } else it)
@@ -70,8 +70,8 @@ fun PhotosScreen(library: Boolean) {
     }
     LaunchedEffect(Unit) {
         val initial = (context as ComponentActivity).intent.data
-        if (initial != null) op.run("Opening image", { PhotoRef(initial, context.displayName(initial)) }) { photos = listOf(it); selected = it; op.notice("Image opened") }
-        else if (library) op.run("Loading saved collection", {
+        if (initial != null) op.run("Opening image", { _ -> PhotoRef(initial, context.displayName(initial)) }) { photos = listOf(it); selected = it; op.notice("Image opened") }
+        else if (library) op.run("Loading saved collection", { _ ->
             val saved = JSONArray(prefs.getString("uris", "[]"))
             (0 until saved.length()).map { Uri.parse(saved.getString(it)) }.map { uri -> PhotoRef(uri, runCatching { context.displayName(uri) }.getOrDefault("That file could not be read. Select it again.")) }
         }) { photos = it; op.notice("${it.size} saved references. Missing permissions require selecting the photo again.") }

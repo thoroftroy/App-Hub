@@ -68,7 +68,7 @@ fun MonitorScreen() {
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
             val snapshot = export
-            op.run("Exporting the displayed diagnostic report", { context.contentResolver.openOutputStream(uri, "w")!!.use { it.write(snapshot.toByteArray()) } }) { op.notice("Report saved locally. Nothing was uploaded.") }
+            op.run("Exporting the displayed diagnostic report", { _ -> context.contentResolver.openOutputStream(uri, "w")!!.use { it.write(snapshot.toByteArray()) } }) { op.notice("Report saved locally. Nothing was uploaded.") }
         }
     }
     DisposableEffect(activity) {
