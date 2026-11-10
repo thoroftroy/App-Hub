@@ -1,6 +1,6 @@
 # App Hub for Android
 
-Installs and updates the whole Wonderdesk suite. By Rednave.
+Installs and updates the whole Wonderdesk suite.
 
 ## Install
 

@@ -11,7 +11,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import org.json.JSONArray
+import java.util.regex.Pattern
 import org.json.JSONObject
 
 const val SUITE_GITHUB_OWNER = "thoroftroy"
@@ -21,7 +21,6 @@ data class SuiteEntry(val name: String, val pkg: String, val repo: String)
 
 val SUITE_ENTRIES = listOf(
     SuiteEntry("Abacus", "dev.wonderdesk.abacus", "Abacus"),
-    SuiteEntry("App Hub", "dev.wonderdesk.apphub", "App-Hub"),
     SuiteEntry("Beacon", "dev.wonderdesk.beacon", "Beacon"),
     SuiteEntry("Bliss Player", "com.blissplayer.music.debug", "BlissPlayer"),
     SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle"),
@@ -34,11 +33,10 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Pulse", "dev.wonderdesk.pulse", "Pulse"),
     SuiteEntry("Safekeeper", "dev.wonderdesk.safekeeper", "Safekeeper"),
     SuiteEntry("Scribble", "dev.wonderdesk.scribble", "Scribble"),
-    SuiteEntry("Shutter", "dev.wonderdesk.shutter", "Shutter"),
-    SuiteEntry("Spyglass", "dev.wonderdesk.spyglass", "Spyglass"),
     SuiteEntry("Timepiece", "dev.wonderdesk.timepiece", "Timepiece"),
     SuiteEntry("Vault", "dev.wonderdesk.vault", "Vault"),
     SuiteEntry("Wayfinder", "dev.wonderdesk.wayfinder", "Wayfinder"),
+    SuiteEntry("Wonderdesk App Hub", "dev.wonderdesk.apphub", "App-Hub"),
 )
 
 val SUITE_PKG_SET = SUITE_ENTRIES.map { it.pkg }.toSet()
@@ -50,35 +48,20 @@ fun missingSuiteEntries(installedPkgs: Set<String>, query: String): List<SuiteEn
 /** A published release carrying an APK. Pure for testing. */
 data class SuiteRelease(val tag: String, val version: String, val apkName: String, val apkUrl: String)
 
-private fun releaseFromJson(obj: JSONObject): SuiteRelease? {
-    if (obj.optBoolean("draft")) return null
-    val tag = obj.optString("tag_name").trim()
-    if (tag.isEmpty()) return null
-    val assets = obj.optJSONArray("assets") ?: return null
-    for (i in 0 until assets.length()) {
-        val asset = assets.optJSONObject(i) ?: continue
-        val name = asset.optString("name")
-        val url = asset.optString("browser_download_url")
-        if (name.endsWith(".apk", ignoreCase = true) && url.isNotBlank()) {
-            return SuiteRelease(tag, tag.removePrefix("v"), name, url)
-        }
-    }
-    return null
+/** Newest release or pre-release tag from the releases atom feed. */
+private val ATOM_ENTRY = Pattern.compile("<entry>.*?<id>tag:github\\.com,2008:Repository/[^<]*/(v[0-9][^<]*)</id>.*?<title>([^<]*)</title>", Pattern.DOTALL)
+
+/** GitHub's atom feed has no API rate limit, unlike the JSON API.
+ *  The repo slug is passed in; the newest tag, asset name and download URL
+ *  are derived deterministically (release assets always follow the same naming). */
+fun parseAtomFeed(xml: String, repo: String): SuiteRelease? {
+    val m = ATOM_ENTRY.matcher(xml)
+    if (!m.find()) return null
+    val tag = m.group(1) ?: return null
+    val version = tag.removePrefix("v")
+    val fileName = if (repo == "BlissPlayer") "BlissPlayer-v$version-debug.apk" else "Wonderdesk-$repo-v$version-debug.apk"
+    return SuiteRelease(tag, version, fileName, "https://github.com/$SUITE_GITHUB_OWNER/$repo/releases/download/$tag/$fileName")
 }
-
-/** Newest release carrying an APK, or null when the JSON has none. Pure for testing. */
-fun parseLatestRelease(json: String): SuiteRelease? =
-    runCatching { releaseFromJson(JSONObject(json)) }.getOrNull()
-
-/** Newest entry (release or pre-release) carrying an APK. Pure for testing. */
-fun parseReleasesList(json: String): SuiteRelease? =
-    runCatching {
-        val array = JSONArray(json)
-        for (i in 0 until array.length()) {
-            releaseFromJson(array.optJSONObject(i) ?: continue)?.let { return it }
-        }
-        null
-    }.getOrNull()
 
 /** Numeric dot-separated compare: 0.2.10 > 0.2.9. Non-numeric tails compare as strings. Pure for testing. */
 fun compareVersions(a: String, b: String): Int {
@@ -95,29 +78,30 @@ fun compareVersions(a: String, b: String): Int {
     return 0
 }
 
-private fun githubConnection(url: String): HttpURLConnection {
+private fun openConnection(url: String): HttpURLConnection {
     val c = URL(url).openConnection() as HttpURLConnection
-    c.connectTimeout = 20_000
-    c.readTimeout = 30_000
-    c.setRequestProperty("Accept", "application/vnd.github+json")
+    c.connectTimeout = 15_000
+    c.readTimeout = 25_000
+    c.instanceFollowRedirects = true
     c.setRequestProperty("User-Agent", "Wonderdesk-App-Hub")
     return c
 }
 
-/** Newest release or pre-release carrying an APK. Throws with a user-readable message on failure. */
-fun fetchLatestRelease(repo: String): SuiteRelease {
-    val url = "https://api.github.com/repos/$SUITE_GITHUB_OWNER/$repo/releases?per_page=10"
-    val c = githubConnection(url)
+private fun read(url: String): String {
+    val c = openConnection(url)
     try {
         val code = c.responseCode
-        if (code == 401 || code == 403) throw IllegalStateException("GitHub refused ($code). Check again later.")
-        if (code == 404) throw IllegalStateException("No releases found for $repo yet.")
         if (code !in 200..299) throw IllegalStateException("GitHub answered $code.")
-        val body = c.inputStream.bufferedReader().use { it.readText() }
-        return parseReleasesList(body) ?: throw IllegalStateException("No $repo release has an APK attached yet.")
+        return c.inputStream.bufferedReader().use { it.readText() }
     } finally {
         c.disconnect()
     }
+}
+
+/** Newest release or pre-release carrying an APK. Throws with a user-readable message on failure. */
+fun fetchLatestRelease(repo: String): SuiteRelease {
+    val xml = read("https://github.com/$SUITE_GITHUB_OWNER/$repo/releases.atom")
+    return parseAtomFeed(xml, repo) ?: throw IllegalStateException("No releases found for $repo yet.")
 }
 
 fun installedVersion(context: Context, pkg: String): String? =
@@ -127,22 +111,12 @@ fun installedVersion(context: Context, pkg: String): String? =
 fun downloadApk(context: Context, release: SuiteRelease): File {
     val dir = File(context.cacheDir, "updates").apply { mkdirs() }
     val out = File(dir, release.apkName)
-    val c = githubConnection(release.apkUrl)
+    val c = openConnection(release.apkUrl)
     try {
-        // Release assets redirect to a different host; follow manually.
-        c.instanceFollowRedirects = false
+        c.instanceFollowRedirects = true
         val code = c.responseCode
-        val location = c.getHeaderField("Location")
-        c.disconnect()
-        val get = if (code in 300..399 && !location.isNullOrBlank()) URL(location).openConnection() as HttpURLConnection else githubConnection(release.apkUrl)
-        try {
-            get.instanceFollowRedirects = true
-            get.connect()
-            if (get.responseCode !in 200..299) throw IllegalStateException("Download failed (${get.responseCode}).")
-            get.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
-        } finally {
-            get.disconnect()
-        }
+        if (code !in 200..299) throw IllegalStateException("Download failed (${code}).")
+        c.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
     } catch (e: IllegalStateException) { throw e
     } catch (e: Exception) { throw IllegalStateException("Download failed: ${e.localizedMessage ?: e.javaClass.simpleName}") }
     if (out.length() == 0L) throw IllegalStateException("Downloaded file is empty.")
@@ -175,6 +149,7 @@ fun checkAllForUpdates(context: Context): List<Pair<SuiteEntry, SuiteRelease>> {
 
 private const val UPDATE_PREFS = "suite-updates"
 private const val DAILY_KEY = "daily_check"
+private const val CACHE_PREFIX = "release_"
 private const val CHANNEL_ID = "suite-updates"
 private const val CHECK_ACTION = "dev.wonderdesk.shared.CHECK_UPDATES"
 
@@ -183,6 +158,21 @@ fun dailyCheckEnabled(context: Context): Boolean =
 
 fun setDailyCheckEnabled(context: Context, enabled: Boolean) {
     context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).edit().putBoolean(DAILY_KEY, enabled).apply()
+}
+
+private fun prefs(context: Context) = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+
+fun cachedRelease(context: Context, pkg: String): SuiteRelease? {
+    val raw = prefs(context).getString(CACHE_PREFIX + pkg, null) ?: return null
+    return runCatching {
+        val j = JSONObject(raw)
+        SuiteRelease(j.getString("tag"), j.getString("version"), j.getString("apkName"), j.getString("apkUrl"))
+    }.getOrNull()
+}
+
+fun cacheRelease(context: Context, pkg: String, rel: SuiteRelease) {
+    val j = JSONObject().put("tag", rel.tag).put("version", rel.version).put("apkName", rel.apkName).put("apkUrl", rel.apkUrl)
+    prefs(context).edit().putString(CACHE_PREFIX + pkg, j.toString()).apply()
 }
 
 private fun checkPendingIntent(context: Context): PendingIntent {

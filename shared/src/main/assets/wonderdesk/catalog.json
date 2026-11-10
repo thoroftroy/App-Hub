@@ -39,21 +39,6 @@
       ]
     },
     {
-      "id": "spyglass",
-      "name": "Spyglass",
-      "generic": "Image Viewer",
-      "aliases": [
-        "image viewer",
-        "photo viewer",
-        "open picture"
-      ],
-      "keywords": [
-        "image",
-        "photo",
-        "picture"
-      ]
-    },
-    {
       "id": "memories",
       "name": "Memories",
       "generic": "Photo Library",
@@ -141,20 +126,6 @@
         "text",
         "notes",
         "markdown"
-      ]
-    },
-    {
-      "id": "shutter",
-      "name": "Shutter",
-      "generic": "Screenshot",
-      "aliases": [
-        "screenshot",
-        "screen capture",
-        "screen recorder"
-      ],
-      "keywords": [
-        "screenshot",
-        "record"
       ]
     },
     {
@@ -385,15 +356,17 @@
     },
     {
       "id": "app-hub",
-      "name": "App Hub",
+      "name": "Wonderdesk App Hub",
       "generic": "Software Center",
       "aliases": [
+        "App Hub",
         "software center",
         "app store",
         "install applications",
         "updates"
       ],
       "keywords": [
+        "App Hub",
         "install",
         "update"
       ]

@@ -27,6 +27,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 data class LaunchableApp(val component: ComponentName, val title: String, val icon: Bitmap?, val version: String, val aliases: List<String> = emptyList()) {
     val key: String get() = component.flattenToString()
@@ -48,7 +55,7 @@ fun loadLaunchableApps(context: Context): List<LaunchableApp> {
 
 fun Context.launchApp(app: LaunchableApp, report: (String) -> Unit) = launchSafely(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED), report)
 
-/** Suite filter for the manage view. Includes the installed BlissPlayer music app variants. Pure for testing. */
+/** Suite filter. Includes the installed BlissPlayer music app variants. Pure for testing. */
 fun isSuiteApp(app: LaunchableApp): Boolean =
     app.component.packageName.startsWith("dev.wonderdesk.") ||
         app.component.packageName == "com.blissplayer.music" ||
@@ -72,7 +79,7 @@ fun AppSearchScreen(manage: Boolean = false) {
     var daily by remember { mutableStateOf(dailyCheckEnabled(context)) }
     val installedPkgs = remember(apps) { apps.map { it.component.packageName }.toSet() }
     val matches = remember(apps, query) { apps.filter { it.matches(query) } }
-    // Suite apps that are not on the phone yet, so they can be installed from here.
+    // Wonderdesk apps that are not on the phone yet, so they can be installed from here.
     val rows = remember(matches, query, releases) {
         if (!manage) matches
         else filterManageApps(matches, query, true) + missingSuiteEntries(installedPkgs, query)
@@ -98,16 +105,24 @@ fun AppSearchScreen(manage: Boolean = false) {
         return if (runCatching { compareVersions(rel.version, app.version) > 0 }.getOrDefault(false)) RowKind.UpdateAvailable else RowKind.UpToDate
     }
     fun checkUpdates() {
-        op.run("Checking releases", {
-            val found = mutableMapOf<String, SuiteRelease>()
-            var failures = 0
-            for (e in SUITE_ENTRIES) {
-                try { found[e.pkg] = fetchLatestRelease(e.repo) } catch (_: Exception) { failures++ }
+        op.run("Checking for updates", {
+            runBlocking {
+                val found = mutableMapOf<String, SuiteRelease>()
+                var failures = 0
+                withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        SUITE_ENTRIES.map { e ->
+                            async {
+                                try { found[e.pkg] = fetchLatestRelease(e.repo); cacheRelease(context, e.pkg, found[e.pkg]!!) } catch (_: Exception) { failures++ }
+                            }
+                        }.awaitAll()
+                    }
+                }
+                Pair(found, failures)
             }
-            Pair(found, failures)
         }) { (found, failures) ->
             releases = found
-            releaseError = if (failures > 0) "$failures of ${SUITE_ENTRIES.size} could not be checked (no release yet or offline)." else ""
+            releaseError = if (failures > 0) "$failures of ${SUITE_ENTRIES.size} could not be checked. Pull to retry." else ""
             val names = found.mapNotNull { (pkg, rel) ->
                 val installed = installedVersion(context, pkg) ?: return@mapNotNull null
                 if (runCatching { compareVersions(rel.version, installed) > 0 }.getOrDefault(false)) SUITE_ENTRIES.find { it.pkg == pkg }?.name else null
@@ -128,11 +143,16 @@ fun AppSearchScreen(manage: Boolean = false) {
         val entry = SUITE_ENTRIES.find { it.pkg == app.component.packageName } ?: return
         op.run("Getting ${entry.name} release", { fetchLatestRelease(entry.repo) }) { rel ->
             releases = releases + (entry.pkg to rel)
-            fetchAndInstall(app.copy(version = "unknown"))
+            cacheRelease(context, entry.pkg, rel)
+            op.notice("Downloading ${rel.apkName}")
+            op.run("Downloading ${rel.apkName}", { downloadApk(context, rel) }) { file ->
+                op.notice("Downloaded. Android will ask you to confirm the install.")
+                try { installApk(context, file) } catch (e: Exception) { op.notice("Could not open the installer: ${e.localizedMessage}") }
+            }
         }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it; op.notice("${it.size} launchable apps. Android may hide other packages.") } }
+    fun refresh() { op.run("Reading launchable installed apps", { loadLaunchableApps(context) }) { apps = it } }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
         activity.lifecycle.addObserver(observer)
@@ -145,6 +165,9 @@ fun AppSearchScreen(manage: Boolean = false) {
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+            // Show what we already know immediately, then refresh in the background.
+            val cached = SUITE_ENTRIES.mapNotNull { e -> cachedRelease(context, e.pkg)?.let { e.pkg to it } }.toMap()
+            if (cached.isNotEmpty()) releases = cached
             var waits = 0
             while (op.busy && waits < 40) { kotlinx.coroutines.delay(500); waits++ }
             checkUpdates()
@@ -160,7 +183,7 @@ fun AppSearchScreen(manage: Boolean = false) {
             }
             if (query.isNotBlank()) TextButton(onClick = { context.launchSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://duckduckgo.com/?q=${Uri.encode(query)}")), op::notice) }) { Text("Search web in browser (sends query)") }
             Text("Only launchable apps and local calculations. Files, private notes and media are not indexed.", style = MaterialTheme.typography.bodySmall)
-        } else Text("Red means not installed, yellow means an update is ready, green means current. Tapping a red app installs it. Android always asks before installing anything.", style = MaterialTheme.typography.bodySmall)
+        } else Text("Red: not installed (tap to install). Yellow: update ready. Green: current. Android always asks before installing.", style = MaterialTheme.typography.bodySmall)
         if (manage) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { checkUpdates() }) { Text("Check for updates") }
@@ -185,9 +208,9 @@ fun AppSearchScreen(manage: Boolean = false) {
                     }
                 } else {
                     val colors = when (rowKind(app)) {
-                        RowKind.UpToDate -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
-                        RowKind.UpdateAvailable -> CardDefaults.cardColors(containerColor = Color(0xFFFFD54F), contentColor = Color(0xFF3E2F00))
-                        RowKind.NotInstalled -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                        RowKind.UpToDate -> CardDefaults.cardColors(containerColor = Color(0xFFD3F3D9), contentColor = Color(0xFF12391C))
+                        RowKind.UpdateAvailable -> CardDefaults.cardColors(containerColor = Color(0xFFFFE082), contentColor = Color(0xFF4A3200))
+                        RowKind.NotInstalled -> CardDefaults.cardColors(containerColor = Color(0xFFF6C6C6), contentColor = Color(0xFF5A1212))
                         RowKind.Plain -> CardDefaults.cardColors()
                     }
                     val installed = app.component.packageName in installedPkgs
