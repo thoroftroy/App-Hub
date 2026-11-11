@@ -165,9 +165,15 @@ enum class Status { NotInstalled, Update, Current }
 fun suiteIcon(e: SuiteEntry): ImageBitmap {
     val context = LocalContext.current
     // Full artwork: from the installed app when there, else the copy bundled in Apphub (cropped either way).
-    val installed = remember(e.pkg, Hub.installed[e.pkg]) { if (e.pkg.startsWith("dev.wonderdesk.") && Hub.installed[e.pkg] != null) context.suiteArt(e.pkg, 192) else null }
+    val ours = e.pkg.startsWith("dev.wonderdesk.") && Hub.installed[e.pkg] != null
+    val installed = if (ours) rememberSuiteArt(e.pkg, 192) else null
     val res = remember(e.id) { context.resources.getIdentifier("suite_${e.id}", "drawable", context.packageName) }
-    val bundled = remember(e.id) { runCatching { fitSquare(trimTransparent(android.graphics.BitmapFactory.decodeResource(context.resources, if (res != 0) res else R.drawable.suite_apphub)), 192).asImageBitmap() }.getOrNull() }
+    // Decoded off the main thread and cached, so scrolling the list never stutters.
+    val bundled = produceState(ArtCache.map.get("bundled:${e.id}"), e.id) {
+        if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { fitSquare(trimTransparent(android.graphics.BitmapFactory.decodeResource(context.resources, if (res != 0) res else R.drawable.suite_apphub)), 192).asImageBitmap() }.getOrNull()?.also { ArtCache.map.put("bundled:${e.id}", it) }
+        }
+    }.value
     return installed ?: bundled ?: ImageBitmap.imageResource(R.drawable.suite_apphub)
 }
 
