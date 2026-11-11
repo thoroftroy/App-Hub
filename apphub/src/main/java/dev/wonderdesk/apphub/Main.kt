@@ -164,9 +164,11 @@ enum class Status { NotInstalled, Update, Current }
 @Composable
 fun suiteIcon(e: SuiteEntry): ImageBitmap {
     val context = LocalContext.current
-    val installedIcon = remember(e.pkg, Hub.installed[e.pkg]) { runCatching { context.packageManager.getApplicationIcon(e.pkg).toBitmap(144, 144).asImageBitmap() }.getOrNull() }
+    // Full artwork: from the installed app when there, else the copy bundled in Apphub (cropped either way).
+    val installed = remember(e.pkg, Hub.installed[e.pkg]) { if (e.pkg.startsWith("dev.wonderdesk.") && Hub.installed[e.pkg] != null) context.suiteArt(e.pkg, 192) else null }
     val res = remember(e.id) { context.resources.getIdentifier("suite_${e.id}", "drawable", context.packageName) }
-    return installedIcon ?: ImageBitmap.imageResource(if (res != 0) res else R.drawable.suite_apphub)
+    val bundled = remember(e.id) { runCatching { fitSquare(trimTransparent(android.graphics.BitmapFactory.decodeResource(context.resources, if (res != 0) res else R.drawable.suite_apphub)), 192).asImageBitmap() }.getOrNull() }
+    return installed ?: bundled ?: ImageBitmap.imageResource(R.drawable.suite_apphub)
 }
 
 @Composable
@@ -310,7 +312,7 @@ private fun SuiteRow(e: SuiteEntry, modifier: Modifier, onOpen: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(e.name, style = MaterialTheme.typography.titleMedium)
-            Text(e.tagline, style = MaterialTheme.typography.bodySmall, color = p.secondaryText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(e.tagline, style = MaterialTheme.typography.bodySmall, color = p.secondaryText, maxLines = 3, overflow = TextOverflow.Ellipsis)
             val v = when (Hub.status(e)) {
                 Status.Update -> "$have → ${rel?.version}"
                 Status.Current -> "Up to date · $have"

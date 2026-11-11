@@ -1,5 +1,12 @@
 # Wonderdesk Apphub changelog
 
+## v0.4.0
+
+- Longer app descriptions are no longer cut off
+- App icons are shown larger and sharper
+- If the app ever crashes or freezes, a report goes to Control Room so it can be shared and fixed
+- App icon art is larger and fills its tile without being cut off
+
 ## v0.3.1
 
 - Release notes: every update shows what's new, and each app's page lists its version history
