@@ -1,5 +1,12 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.0
+
+- Packrat and Memories show their new icons
+- Works properly in landscape: tabs move to a rail at the side so the content keeps its height, and screens that ran out of room now scroll
+- If the app ever crashes it says so next time it opens and offers to send a report (only the error, app version and phone model, with file names and links removed). Turn on automatic sending in Control Room › Wonderdesk
+- Lists can no longer crash when two items share a name
+
 ## v0.4.0
 
 - Longer app descriptions are no longer cut off
