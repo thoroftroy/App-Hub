@@ -1,5 +1,13 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.3
+
+- Tap the tab you're already on to glide back to the top of its list
+- New Updates widget: how many Wonderdesk apps have updates, which ones, and a Check button
+- Nothing required stays hidden: if Android is blocking something the app needs, a slim banner says what and takes you straight to the switch, and Settings › Permissions and access lists everything with its state
+- Updates install by themselves now, like Obtainium: Apphub uses Android's own installer session, so on Android 12 and newer an update to an app Apphub installed needs no taps (Android may ask once the first time)
+- New setting: Install updates automatically. Apphub checks every 6 hours and, on Wi-Fi, downloads and installs updates in the background, then tells you what it updated
+
 ## v0.5.2
 
 - Smoother everywhere: new screens, tabs and Settings ease in instead of snapping, and buttons, tabs, chips and switches give a light tap you can feel (following your phone's touch-feedback setting)

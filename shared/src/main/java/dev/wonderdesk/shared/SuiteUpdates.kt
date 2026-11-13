@@ -402,7 +402,34 @@ fun scheduleDailyCheck(context: Context) {
     val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val pi = checkPendingIntent(context)
     am.cancel(pi)
-    am.setInexactRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + AlarmManager.INTERVAL_DAY, AlarmManager.INTERVAL_DAY, pi)
+    // Automatic updates check every 6 hours; plain notifications once a day. Inexact, so Android batches it with other work.
+    val every = if (autoUpdateEnabled(context)) 6 * AlarmManager.INTERVAL_HOUR else AlarmManager.INTERVAL_DAY
+    am.setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + every, every, pi)
+}
+
+fun autoUpdateEnabled(context: Context): Boolean = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).getBoolean("auto_update", false)
+fun setAutoUpdateEnabled(context: Context, on: Boolean) { context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).edit().putBoolean("auto_update", on).apply() }
+
+/** Background updates: downloads and installs each one in turn (silently where Android allows), then one summary notification. */
+fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>) {
+    val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+    if (cm?.isActiveNetworkMetered == true) { notifyUpdatesAvailable(context, updates.map { it.first.name }); return }
+    val done = mutableListOf<String>(); val failed = mutableListOf<String>()
+    // Apphub last, so updating itself doesn't stop the others.
+    updates.sortedBy { it.first.pkg == context.packageName }.forEach { (e, rel) ->
+        runCatching {
+            val file = downloadApk(context, e, rel)
+            val latch = java.util.concurrent.CountDownLatch(1); var ok = false
+            SilentInstall.install(context, file, e.name, foreground = false) { r -> ok = r.ok; latch.countDown() }
+            latch.await(3, java.util.concurrent.TimeUnit.MINUTES)
+            if (ok) done += e.name else failed += e.name
+        }.onFailure { failed += e.name }
+    }
+    val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    mgr.createNotificationChannel(NotificationChannel(CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
+    if (done.isNotEmpty()) runCatching { mgr.notify(2, android.app.Notification.Builder(context, CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download_done)
+        .setContentTitle(if (done.size == 1) "${done[0]} updated" else "${done.size} Wonderdesk apps updated").setContentText(done.joinToString(", ")).setAutoCancel(true).build()) }
+    if (failed.isNotEmpty()) notifyUpdatesAvailable(context, failed)
 }
 
 fun cancelDailyCheck(context: Context) {

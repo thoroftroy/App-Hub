@@ -49,6 +49,12 @@ class MainActivity : WonderActivity() {
     @Composable override fun Content() = AppHub(intent?.getStringExtra("tab"))
 }
 
+/** What Android must allow for this app to work fully; shown as a banner when off and in Settings. */
+private val APP_NEEDS by lazy { listOf(
+    WonderNeed("Install apps", "Lets Apphub install and update Wonderdesk apps; Android asks you to confirm each one", access = SpecialAccess.Kind.INSTALL),
+    WonderNeed.notifications("Tells you when updates are ready", required = false),
+) }
+
 private const val ABOUT = "Wonderdesk Apphub installs and updates every Wonderdesk app straight from its official GitHub releases. " +
     "Each download is checked to be the right app before Android asks you to confirm the install. It can also check once a day and notify you."
 
@@ -102,6 +108,7 @@ object Hub {
             lastChecked = lastCheckTime(context)
             checking = false
             refreshInstalled(context)
+            refreshWidgets(context, UpdatesWidget::class.java)
             val updates = SUITE_ENTRIES.count { status(it) == Status.Update }
             when {
                 outcome.rateLimitMessage != null -> toast(outcome.rateLimitMessage!!)
@@ -144,19 +151,17 @@ object Hub {
     /** Shows Android's install prompt for the next downloaded APK. */
     fun openNext(context: Context, toast: (String) -> Unit) {
         val (e, file) = queue.firstOrNull() ?: return
-        try { installApk(context, file) } catch (ex: Exception) { toast("Couldn't open the installer for ${e.name}"); queue.removeFirst(); jobs.remove(e.pkg) }
+        // Session install: updates to apps Apphub installed go through without a prompt (like Obtainium); Android asks only when it must.
+        SilentInstall.install(context, file, e.name, foreground = true) { r ->
+            if (queue.firstOrNull()?.first == e) queue.removeFirst()
+            jobs.remove(e.pkg); refreshInstalled(context); refreshWidgets(context, UpdatesWidget::class.java)
+            if (r.ok) toast("${e.name} updated") else toast(r.message ?: "${e.name} was not installed")
+            openNext(context, toast)
+        }
     }
 
-    /** Called on resume: the previous prompt is finished (installed or cancelled), move on. */
-    fun onResume(context: Context, toast: (String) -> Unit) {
-        refreshInstalled(context)
-        val head = queue.firstOrNull() ?: return
-        queue.removeFirst()
-        val (e, _) = head
-        val done = releases[e.pkg]?.let { r -> installed[e.pkg]?.let { compareVersions(r.version, it) <= 0 } } == true
-        if (!done) { jobs.remove(e.pkg); toast("${e.name} was not installed") } else { jobs.remove(e.pkg); toast("${e.name} installed") }
-        if (queue.isNotEmpty()) openNext(context, toast)
-    }
+    /** Called on resume: picks up installs that finished while Apphub was in the background. */
+    fun onResume(context: Context, @Suppress("UNUSED_PARAMETER") toast: (String) -> Unit) { refreshInstalled(context) }
 }
 
 enum class Status { NotInstalled, Update, Current }
@@ -206,7 +211,7 @@ fun AppHub(startTab: String?) {
     }
     val updates = SUITE_ENTRIES.filter { Hub.status(it) == Status.Update }
     val entry = detail?.let { d -> SUITE_ENTRIES.find { it.pkg == d } }
-    WonderApp(
+    WonderApp(needs = APP_NEEDS, 
         appName = "Wonderdesk Apphub", about = ABOUT,
         tabs = if (entry != null) emptyList() else listOf(
             WonderTab("suite", "Wonderdesk", WonderIcons.Storefront),
@@ -223,6 +228,12 @@ fun AppHub(startTab: String?) {
                 SwitchRow("Check once a day", daily, {
                     daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context)
                 }, subtitle = "Sends a notification when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
+                PanelDivider()
+                var auto by remember { mutableStateOf(autoUpdateEnabled(context)) }
+                SwitchRow("Install updates automatically", auto, {
+                    auto = it; setAutoUpdateEnabled(context, it); if (it) { daily = true; setDailyCheckEnabled(context, true) }; scheduleDailyCheck(context)
+                }, subtitle = if (SilentInstall.silentPossible) "Checks every 6 hours on Wi-Fi and updates in the background, no taps needed. The first update of an app Apphub didn't install may ask once"
+                    else "Downloads updates in the background; Android asks you to confirm each one on this version", icon = WonderIcons.SystemUpdate, tint = Color(0xFF1E7FE8))
                 PanelDivider()
                 ListRow("Allow installing apps", subtitle = if (canInstallPackages(context)) "Allowed" else "Needed to install and update", icon = WonderIcons.Security, tint = Color(0xFF2E9E44), chevron = true,
                     onClick = { openInstallPermissionSettings(context) })
@@ -337,7 +348,7 @@ private fun SuiteTab(open: (SuiteEntry) -> Unit) {
     val toast = LocalToast.current
     val missing = SUITE_ENTRIES.filter { Hub.status(it) == Status.NotInstalled }
     val have = SUITE_ENTRIES.filter { Hub.status(it) != Status.NotInstalled }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = rememberTabTopList(), contentPadding = PaddingValues(16.dp)) {
         item {
             Banner(missing.size, have.size) { Hub.install(context, missing, toast) }
             Spacer(Modifier.height(10.dp))
@@ -383,7 +394,7 @@ private fun UpdatesTab(updates: List<SuiteEntry>, open: (SuiteEntry) -> Unit) {
     val toast = LocalToast.current
     val p = wonderPalette()
     val current = SUITE_ENTRIES.filter { Hub.status(it) == Status.Current }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = rememberTabTopList(), contentPadding = PaddingValues(16.dp)) {
         item {
             StatusLine()
             Spacer(Modifier.height(12.dp))

@@ -13,11 +13,12 @@ class UpdateCheckReceiver : BroadcastReceiver() {
             return
         }
         if (!dailyCheckEnabled(app)) return
+        if (autoUpdateEnabled(app)) { AutoUpdateJob.schedule(app); return }
         val done = goAsync()
         Thread {
             try {
-                val names = checkAllForUpdates(app).map { it.first.name }
-                if (names.isNotEmpty()) notifyUpdatesAvailable(app, names)
+                val updates = checkAllForUpdates(app)
+                if (updates.isNotEmpty()) { if (autoUpdateEnabled(app)) autoUpdate(app, updates) else notifyUpdatesAvailable(app, updates.map { it.first.name }) }
             } catch (_: Exception) {
             } finally {
                 done.finish()
