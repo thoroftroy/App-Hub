@@ -237,6 +237,12 @@ fun AppHub(startTab: String?) {
                 PanelDivider()
                 ListRow("Allow installing apps", subtitle = if (canInstallPackages(context)) "Allowed" else "Needed to install and update", icon = WonderIcons.Security, tint = Color(0xFF2E9E44), chevron = true,
                     onClick = { openInstallPermissionSettings(context) })
+                PanelDivider()
+                ListRow("Stop the “Scan app” prompts", subtitle = "Those come from Google Play Protect, not Android. Switch off “Scan apps with Play Protect” and Update all needs one tap. (Android may still ask once per app, the first time Apphub updates it.)",
+                    icon = WonderIcons.Shield, tint = Color(0xFFE39A12), chevron = true, onClick = {
+                        context.launchSafely(android.content.Intent().setClassName("com.google.android.gms", "com.google.android.gms.security.settings.VerifyAppsSettingsActivity").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) {
+                            context.launchSafely(android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) {} }
+                    })
             }
         }
     ) {
