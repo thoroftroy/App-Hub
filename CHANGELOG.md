@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.10
+
+- Ripple joins the suite: install your computer's terminal on your phone from here, and get its updates like every other app
+
 ## v0.5.9
 
 - Widgets show a realistic preview in the widget list, so you can see what you're adding
