@@ -1,3 +1,7 @@
 <resources>
     <string name="widget_updateswidget_desc">How many Wonderdesk apps have updates waiting</string>
+    <string name="wp_label">Wonderdesk Apphub</string>
+    <string name="wp_title">Everything\'s up to date</string>
+    <string name="wp_text">Checked 10 minutes ago</string>
+    <string name="wp_btn">Check</string>
 </resources>

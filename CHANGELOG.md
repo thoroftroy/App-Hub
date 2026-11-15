@@ -1,5 +1,10 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.9
+
+- Widgets show a realistic preview in the widget list, so you can see what you're adding
+- Fixed a crash when moving around with arrow keys or Tab while a screen was closing
+
 ## v0.5.8
 
 - Settings › Updates has a shortcut to switch off Google Play Protect's “Scan app” prompts, so Update all really is one tap
