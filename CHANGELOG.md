@@ -1,5 +1,10 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.11
+
+- Updates are found sooner: Apphub checks every hour, and tells you once as soon as a new version is out
+- The update notification has an Update now button: tap it and every app updates in the background with progress shown, no need to open Apphub (on any network, even mobile data, since you asked)
+
 ## v0.5.10
 
 - Ripple joins the suite: install your computer's terminal on your phone from here, and get its updates like every other app

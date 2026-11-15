@@ -349,8 +349,8 @@ data class CheckOutcome(val releases: Map<String, SuiteRelease>, val failures: M
 fun lastCheckTime(context: Context): Long = prefs(context).getLong(LAST_CHECK_KEY, 0L)
 
 /** Installed suite apps that have a newer release. Used for notifications. */
-fun checkAllForUpdates(context: Context): List<Pair<SuiteEntry, SuiteRelease>> {
-    val outcome = checkReleases(context, force = false, maxAgeMs = 6 * 3600_000L)
+fun checkAllForUpdates(context: Context, maxAgeMs: Long = 6 * 3600_000L): List<Pair<SuiteEntry, SuiteRelease>> {
+    val outcome = checkReleases(context, force = false, maxAgeMs = maxAgeMs)
     return SUITE_ENTRIES.mapNotNull { e ->
         val installed = installedVersion(context, e.pkg) ?: return@mapNotNull null
         val rel = outcome.releases[e.pkg] ?: return@mapNotNull null
@@ -367,6 +367,7 @@ private const val CACHE_PREFIX = "release_"
 private const val CACHE_TIME_PREFIX = "release_at_"
 private const val CHANNEL_ID = "suite-updates"
 private const val CHECK_ACTION = "dev.wonderdesk.shared.CHECK_UPDATES"
+const val UPDATE_NOW_ACTION = "dev.wonderdesk.shared.UPDATE_NOW"
 
 fun dailyCheckEnabled(context: Context): Boolean =
     context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).getBoolean(DAILY_KEY, true)
@@ -403,8 +404,8 @@ fun scheduleDailyCheck(context: Context) {
     val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val pi = checkPendingIntent(context)
     am.cancel(pi)
-    // Automatic updates check every 6 hours; plain notifications once a day. Inexact, so Android batches it with other work.
-    val every = if (autoUpdateEnabled(context)) 6 * AlarmManager.INTERVAL_HOUR else AlarmManager.INTERVAL_DAY
+    // Checks hourly, so a new release shows up soon after it is published. Inexact, so Android batches it with other work.
+    val every = AlarmManager.INTERVAL_HOUR
     am.setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + every, every, pi)
 }
 
@@ -412,9 +413,15 @@ fun autoUpdateEnabled(context: Context): Boolean = context.getSharedPreferences(
 fun setAutoUpdateEnabled(context: Context, on: Boolean) { context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).edit().putBoolean("auto_update", on).apply() }
 
 /** Background updates: downloads and installs each one in turn (silently where Android allows), then one summary notification. */
-fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>) {
+fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>, force: Boolean = false) {
     val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
-    if (cm?.isActiveNetworkMetered == true) { notifyUpdatesAvailable(context, updates.map { it.first.name }); return }
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    if (force) {
+        nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
+        runCatching { nm.notify(3, android.app.Notification.Builder(context, CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("Updating Wonderdesk apps")
+            .setContentText(updates.joinToString(", ") { it.first.name }).setProgress(0, 0, true).setOngoing(true).build()) }
+    }
+    if (!force && cm?.isActiveNetworkMetered == true) { notifyUpdatesAvailable(context, updates.map { it.first.name }); return }
     val done = mutableListOf<String>(); val failed = mutableListOf<String>()
     // Apphub last, so updating itself doesn't stop the others.
     updates.sortedBy { it.first.pkg == context.packageName }.forEach { (e, rel) ->
@@ -430,6 +437,7 @@ fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>) 
     mgr.createNotificationChannel(NotificationChannel(CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
     if (done.isNotEmpty()) runCatching { mgr.notify(2, android.app.Notification.Builder(context, CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download_done)
         .setContentTitle(if (done.size == 1) "${done[0]} updated" else "${done.size} Wonderdesk apps updated").setContentText(done.joinToString(", ")).setAutoCancel(true).build()) }
+    if (force) nm.cancel(3)
     if (failed.isNotEmpty()) notifyUpdatesAvailable(context, failed)
 }
 
@@ -451,6 +459,18 @@ fun notifyUpdatesAvailable(context: Context, names: List<String>) {
         .setContentText(text)
         .setContentIntent(open)
         .setAutoCancel(true)
+        .addAction(android.app.Notification.Action.Builder(null, "Update now", PendingIntent.getBroadcast(context, 1,
+            Intent(context, UpdateCheckReceiver::class.java).setAction(UPDATE_NOW_ACTION), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build())
         .build()
     mgr.notify(1, note)
+}
+
+/** Tells you about each release once: the hourly check calls this, so a version you already heard about doesn't ping again. */
+fun notifyNewUpdates(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>) {
+    val p = prefs(context)
+    val told = p.getStringSet("notified", emptySet()).orEmpty()
+    val fresh = updates.filter { (e, r) -> "${e.pkg}:${r.version}" !in told }
+    if (fresh.isEmpty()) return
+    p.edit().putStringSet("notified", told + fresh.map { (e, r) -> "${e.pkg}:${r.version}" }).apply()
+    notifyUpdatesAvailable(context, updates.map { it.first.name })
 }

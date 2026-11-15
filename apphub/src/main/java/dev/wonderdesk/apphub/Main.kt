@@ -56,7 +56,7 @@ private val APP_NEEDS by lazy { listOf(
 ) }
 
 private const val ABOUT = "Wonderdesk Apphub installs and updates every Wonderdesk app straight from its official GitHub releases. " +
-    "Each download is checked to be the right app before Android asks you to confirm the install. It can also check once a day and notify you."
+    "Each download is checked to be the right app before Android asks you to confirm the install. It can also check every hour and notify you the moment an update is out, with an Update now button."
 
 /** What App Hub is doing for one app. */
 sealed class Job {
@@ -225,7 +225,7 @@ fun AppHub(startTab: String?) {
         },
         settings = {
             Panel(title = "Updates") {
-                SwitchRow("Check once a day", daily, {
+                SwitchRow("Check for updates every hour", daily, {
                     daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context)
                 }, subtitle = "Sends a notification when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
                 PanelDivider()

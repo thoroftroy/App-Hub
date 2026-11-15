@@ -89,7 +89,8 @@ class AutoUpdateJob : android.app.job.JobService() {
     private var worker: Thread? = null
     override fun onStartJob(p: android.app.job.JobParameters): Boolean {
         worker = Thread {
-            runCatching { val u = checkAllForUpdates(applicationContext); if (u.isNotEmpty()) autoUpdate(applicationContext, u) }
+            val force = p.transientExtras.getBoolean("force", false)
+            runCatching { val u = checkAllForUpdates(applicationContext, if (force) 60_000L else 50 * 60_000L); if (u.isNotEmpty()) autoUpdate(applicationContext, u, force) }
             jobFinished(p, false)
         }.also { it.start() }
         return true
@@ -97,9 +98,12 @@ class AutoUpdateJob : android.app.job.JobService() {
     override fun onStopJob(p: android.app.job.JobParameters) = true
 
     companion object {
-        fun schedule(c: Context) {
-            val info = android.app.job.JobInfo.Builder(0x4AB, android.content.ComponentName(c, AutoUpdateJob::class.java))
-                .setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_UNMETERED).setRequiresStorageNotLow(true).build()
+        /** [now]: the user tapped "Update now": run at once, on any network. */
+        fun schedule(c: Context, now: Boolean = false) {
+            val b = android.app.job.JobInfo.Builder(if (now) 0x4AC else 0x4AB, android.content.ComponentName(c, AutoUpdateJob::class.java))
+            val info = if (now) b.setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_ANY).setExpedited(true)
+                .setTransientExtras(android.os.Bundle().apply { putBoolean("force", true) }).build()
+            else b.setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_UNMETERED).setRequiresStorageNotLow(true).build()
             runCatching { c.getSystemService(android.app.job.JobScheduler::class.java).schedule(info) }
         }
     }
