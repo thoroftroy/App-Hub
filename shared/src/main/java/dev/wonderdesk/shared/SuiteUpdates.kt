@@ -30,6 +30,7 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle", "Calendar with tasks, reminders, widgets and Google sync"),
     SuiteEntry("Cinema", "dev.wonderdesk.cinema", "Cinema", "Video player and editor for every video on your phone"),
     SuiteEntry("Control Room", "dev.wonderdesk.controlroom", "Control-Room", "Quick controls, every setting and the suite-wide look"),
+    SuiteEntry("Echo", "dev.wonderdesk.echo", "Echo", "Record, clean up and edit voice and sound with one-tap Studio Voice"),
     SuiteEntry("Launcher", "dev.wonderdesk.launcher", "Wonderdesk-Launcher", "An Aqua home screen with Dock, Launchpad and widgets"),
     SuiteEntry("Memories", "dev.wonderdesk.memories", "Memories", "Every photo and video, with albums and a full editor"),
     SuiteEntry("Packrat", "dev.wonderdesk.packrat", "Packrat", "Open, browse, extract and create archives"),

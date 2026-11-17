@@ -1,5 +1,10 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.16
+
+- Loading screens now say what they are doing instead of showing a bare spinner
+- Wording tidied so no sentence needs a dash
+
 ## v0.5.15
 
 - Updates are fully built in again. Hourly GitHub checks with no outside services. The settings switch turns background checks off entirely
