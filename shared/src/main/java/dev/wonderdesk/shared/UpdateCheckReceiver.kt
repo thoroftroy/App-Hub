@@ -9,7 +9,7 @@ class UpdateCheckReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            if (dailyCheckEnabled(app)) { scheduleDailyCheck(app); Thread { runCatching { ensurePush(app) } }.start() }
+            if (dailyCheckEnabled(app)) scheduleDailyCheck(app)
             return
         }
         if (intent.action == UPDATE_NOW_ACTION) { AutoUpdateJob.schedule(app, now = true); return }
@@ -18,9 +18,7 @@ class UpdateCheckReceiver : BroadcastReceiver() {
         val done = goAsync()
         Thread {
             try {
-                // A ping means something was just published: skip the cache and look right now.
-                val pinged = runCatching { checkReleasePings(app) }.getOrDefault(false)
-                val updates = checkAllForUpdates(app, if (pinged) 0L else 50 * 60_000L)
+                val updates = checkAllForUpdates(app, 50 * 60_000L)
                 if (updates.isNotEmpty()) { if (autoUpdateEnabled(app)) autoUpdate(app, updates) else notifyNewUpdates(app, updates) }
             } catch (_: Exception) {
             } finally {

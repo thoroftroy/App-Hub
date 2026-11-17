@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.15
+
+- Updates are fully built in again. Hourly GitHub checks with no outside services. The settings switch turns background checks off entirely
+
 ## v0.5.14
 
 - Releases now push the phone at once when instant alerts are set up. Until then the hourly check still finds them

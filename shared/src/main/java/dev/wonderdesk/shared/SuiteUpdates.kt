@@ -348,34 +348,6 @@ data class CheckOutcome(val releases: Map<String, SuiteRelease>, val failures: M
 
 fun lastCheckTime(context: Context): Long = prefs(context).getLong(LAST_CHECK_KEY, 0L)
 
-/** Release pings posted by the release script when new builds go out. One tiny request
- *  says whether anything changed, so most checks cost nothing and new releases
- *  still surface quickly without opening the app. */
-fun lastReleasePing(context: Context) = prefs(context).getLong(RELEASE_SEEN_KEY, 0L)
-
-fun checkReleasePings(context: Context): Boolean {
-    val since = prefs(context).getLong(RELEASE_SEEN_KEY, 0L)
-    val query = if (since > 0) (since / 1000).toString() else "all"
-    val fresh = try {
-        val json = fetchText("$RELEASE_TOPIC/json?since=$query&poll=1")
-        var found = false
-        var newest = since
-        json.lineSequence().forEach { line ->
-            val o = runCatching { org.json.JSONObject(line) }.getOrNull() ?: return@forEach
-            if (o.optString("event") != "message") return@forEach
-            if (o.optString("title") != RELEASE_TITLE) return@forEach
-            val at = o.optLong("time", 0L) * 1000L
-            if (at > since) found = true
-            if (at > newest) newest = at
-        }
-        prefs(context).edit().putLong(RELEASE_SEEN_KEY, maxOf(newest, System.currentTimeMillis() - 1000L)).apply()
-        found
-    } catch (_: Exception) {
-        false
-    }
-    return fresh
-}
-
 /** Installed suite apps that have a newer release. Used for notifications. */
 fun checkAllForUpdates(context: Context, maxAgeMs: Long = 6 * 3600_000L): List<Pair<SuiteEntry, SuiteRelease>> {
     val outcome = checkReleases(context, force = false, maxAgeMs = maxAgeMs)
@@ -391,14 +363,11 @@ fun checkAllForUpdates(context: Context, maxAgeMs: Long = 6 * 3600_000L): List<P
 private const val UPDATE_PREFS = "suite-updates"
 private const val DAILY_KEY = "daily_check"
 private const val LAST_CHECK_KEY = "last_check"
-private const val RELEASE_SEEN_KEY = "release_ping_seen"
 private const val CACHE_PREFIX = "release_"
 private const val CACHE_TIME_PREFIX = "release_at_"
 private const val CHANNEL_ID = "suite-updates"
 private const val CHECK_ACTION = "dev.wonderdesk.shared.CHECK_UPDATES"
 const val UPDATE_NOW_ACTION = "dev.wonderdesk.shared.UPDATE_NOW"
-private const val RELEASE_TOPIC = "https://ntfy.sh/wonderdesk-releases-60b8ba18017c866a"
-private const val RELEASE_TITLE = "Wonderdesk updates"
 
 fun dailyCheckEnabled(context: Context): Boolean =
     context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).getBoolean(DAILY_KEY, true)
@@ -451,8 +420,7 @@ fun scheduleDailyCheck(context: Context) {
     val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val pi = checkPendingIntent(context)
     am.cancel(pi)
-    // Hourly safety net. Instant alerts arrive over push when set up, so this
-    // only matters for phones without push or before the Firebase file ships.
+    // Hourly safety net, fully built in: plain GitHub release checks, no outside services.
     // Inexact so Android batches it with other work.
     val every = AlarmManager.INTERVAL_HOUR
     am.setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + every, every, pi)
