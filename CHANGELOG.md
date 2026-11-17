@@ -1,5 +1,10 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.17
+
+- Apps updated in the background now leave a notification listing each app, the version it came from and what changed
+- The first time you open App Hub after background updates it shows which apps were updated, from which version to which, and the notes for each
+
 ## v0.5.16
 
 - Loading screens now say what they are doing instead of showing a bare spinner

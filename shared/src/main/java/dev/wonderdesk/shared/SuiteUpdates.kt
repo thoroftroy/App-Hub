@@ -430,6 +430,41 @@ fun scheduleDailyCheck(context: Context) {
 fun autoUpdateEnabled(context: Context): Boolean = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).getBoolean("auto_update", false)
 fun setAutoUpdateEnabled(context: Context, on: Boolean) { context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).edit().putBoolean("auto_update", on).apply() }
 
+/** One app that was updated while you were away: what it was, what it is now, and what changed. */
+data class UpdateReportItem(val name: String, val pkg: String, val from: String?, val to: String, val notes: List<Pair<String, String>>)
+
+fun recordUpdate(context: Context, e: SuiteEntry, rel: SuiteRelease, from: String?) {
+    val p = prefs(context)
+    val arr = runCatching { org.json.JSONArray(p.getString("report", "[]")) }.getOrDefault(org.json.JSONArray())
+    val keep = org.json.JSONArray(); for (i in 0 until arr.length()) if (arr.getJSONObject(i).optString("pkg") != e.pkg) keep.put(arr.getJSONObject(i))
+    keep.put(JSONObject().put("name", e.name).put("pkg", e.pkg).put("from", from ?: "").put("to", rel.version)
+        .put("notes", org.json.JSONArray(rel.notesSince(from).map { JSONObject().put("v", it.first).put("n", it.second) })))
+    p.edit().putString("report", keep.toString()).apply()
+}
+
+fun forgetUpdate(context: Context, pkg: String) {
+    val p = prefs(context); val arr = runCatching { org.json.JSONArray(p.getString("report", "[]")) }.getOrDefault(org.json.JSONArray())
+    val keep = org.json.JSONArray(); for (i in 0 until arr.length()) if (arr.getJSONObject(i).optString("pkg") != pkg) keep.put(arr.getJSONObject(i))
+    p.edit().putString("report", keep.toString()).apply()
+}
+
+fun pendingUpdateReport(context: Context): List<UpdateReportItem> = runCatching {
+    val arr = org.json.JSONArray(prefs(context).getString("report", "[]"))
+    (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
+        val n = o.optJSONArray("notes")
+        UpdateReportItem(o.getString("name"), o.getString("pkg"), o.optString("from").ifBlank { null }, o.getString("to"),
+            if (n == null) emptyList() else (0 until n.length()).map { n.getJSONObject(it).let { x -> x.getString("v") to x.optString("n") } })
+    }
+}.getOrDefault(emptyList())
+
+fun clearUpdateReport(context: Context) { prefs(context).edit().remove("report").apply() }
+
+/** Short plain text of what changed, for a notification. */
+private fun reportLine(r: UpdateReportItem): String {
+    val bullets = r.notes.flatMap { it.second.lines() }.map { it.trim().removePrefix("•").removePrefix("-").trim() }.filter { it.isNotBlank() && !it.startsWith("#") }.take(2)
+    return "${r.name} ${r.from ?: "new"} to ${r.to}" + (if (bullets.isEmpty()) "" else ": " + bullets.joinToString("; "))
+}
+
 /** Background updates: downloads and installs each one in turn (silently where Android allows), then one summary notification. */
 fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>, force: Boolean = false) {
     val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
@@ -445,16 +480,22 @@ fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>, 
     updates.sortedBy { it.first.pkg == context.packageName }.forEach { (e, rel) ->
         runCatching {
             val file = downloadApk(context, e, rel)
+            // Written before the install, because updating Apphub itself ends this process before the result comes back.
+            recordUpdate(context, e, rel, installedVersion(context, e.pkg))
             val latch = java.util.concurrent.CountDownLatch(1); var ok = false
             SilentInstall.install(context, file, e.name, foreground = false) { r -> ok = r.ok; latch.countDown() }
             latch.await(3, java.util.concurrent.TimeUnit.MINUTES)
-            if (ok) done += e.name else failed += e.name
-        }.onFailure { failed += e.name }
+            if (ok) done += e.name else { failed += e.name; forgetUpdate(context, e.pkg) }
+        }.onFailure { failed += e.name; forgetUpdate(context, e.pkg) }
     }
     val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     mgr.createNotificationChannel(NotificationChannel(CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
-    if (done.isNotEmpty()) runCatching { mgr.notify(2, android.app.Notification.Builder(context, CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download_done)
-        .setContentTitle(if (done.size == 1) "${done[0]} updated" else "${done.size} Wonderdesk apps updated").setContentText(done.joinToString(", ")).setAutoCancel(true).build()) }
+    if (done.isNotEmpty()) runCatching {
+        val lines = pendingUpdateReport(context).filter { r -> done.contains(r.name) }.map { reportLine(it) }
+        val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { PendingIntent.getActivity(context, 2, it.putExtra("tab", "updated"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE) }
+        mgr.notify(2, android.app.Notification.Builder(context, CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle(if (done.size == 1) "${done[0]} was updated" else "${done.size} Wonderdesk apps were updated").setContentText(lines.firstOrNull() ?: done.joinToString(", "))
+            .setStyle(android.app.Notification.BigTextStyle().bigText(lines.joinToString("\n").ifBlank { done.joinToString(", ") })).setContentIntent(open).setAutoCancel(true).build()) }
     if (force) nm.cancel(3)
     if (failed.isNotEmpty()) notifyUpdatesAvailable(context, failed)
 }

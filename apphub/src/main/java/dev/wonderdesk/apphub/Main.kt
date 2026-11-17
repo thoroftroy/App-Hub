@@ -15,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -189,17 +191,21 @@ fun suiteIcon(e: SuiteEntry): ImageBitmap {
 fun AppHub(startTab: String?) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    var tab by rememberSaveable { mutableStateOf(startTab ?: "suite") }
+    var tab by rememberSaveable { mutableStateOf(startTab?.takeIf { it == "updates" } ?: "suite") }
+    // Apps that were updated in the background since you last looked, with what changed.
+    var report by remember { mutableStateOf<List<UpdateReportItem>>(emptyList()) }
+    fun loadReport() { report = pendingUpdateReport(context).filter { installedVersion(context, it.pkg) == it.to } }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
     var daily by remember { mutableStateOf(dailyCheckEnabled(context)) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     var toastRef by remember { mutableStateOf<(String) -> Unit>({}) }
     DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) Hub.onResume(context) { toastRef(it) } }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) { Hub.onResume(context) { toastRef(it) }; loadReport() } }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(Unit) {
+        loadReport()
         if (!Hub.started) {
             Hub.started = true
             Hub.releases = SUITE_ENTRIES.mapNotNull { e -> cachedRelease(context, e.pkg)?.let { e.pkg to it } }.toMap()
@@ -214,6 +220,20 @@ fun AppHub(startTab: String?) {
             permission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+    if (report.isNotEmpty()) WonderDialog(onDismissRequest = { report.forEach { forgetUpdate(context, it.pkg) }; report = emptyList() },
+        title = { Text(if (report.size == 1) "${report[0].name} was updated" else "${report.size} apps were updated") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("These updates were installed while you were away. Here is what changed.", style = MaterialTheme.typography.bodySmall)
+            report.forEach { r ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("${r.name}: ${r.from ?: "new"} to ${r.to}", style = MaterialTheme.typography.titleSmall)
+                    val lines = r.notes.flatMap { it.second.lines() }.map { it.trim() }.filter { it.isNotBlank() }
+                    if (lines.isEmpty()) Text("No notes were published for this update.", style = MaterialTheme.typography.bodySmall)
+                    lines.forEach { l -> if (l.startsWith("#")) Text(l.trimStart('#', ' '), style = MaterialTheme.typography.labelLarge) else Text("• " + l.removePrefix("•").removePrefix("-").trim(), style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        } },
+        confirmButton = { TextButton(onClick = { report.forEach { forgetUpdate(context, it.pkg) }; report = emptyList() }) { Text("Got it") } })
     val updates = SUITE_ENTRIES.filter { Hub.status(it) == Status.Update }
     val entry = detail?.let { d -> SUITE_ENTRIES.find { it.pkg == d } }
     WonderApp(needs = APP_NEEDS, 
