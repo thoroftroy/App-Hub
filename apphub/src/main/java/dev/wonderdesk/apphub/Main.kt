@@ -254,6 +254,10 @@ fun AppHub(startTab: String?) {
                     daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context)
                 }, subtitle = "Hourly check that tells you when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
                 PanelDivider()
+                val up = remember { context.getSharedPreferences("suite-updates", android.content.Context.MODE_PRIVATE) }
+                var metered by remember { mutableStateOf(up.getBoolean("meteredOk", false)) }
+                SwitchRow("Update on mobile data too", metered, { metered = it; up.edit().putBoolean("meteredOk", it).apply() }, subtitle = "Off waits for Wi-Fi and just tells you an update is ready", icon = WonderIcons.Wifi, tint = Color(0xFF2E9E44))
+                PanelDivider()
                 var auto by remember { mutableStateOf(autoUpdateEnabled(context)) }
                 SwitchRow("Install updates automatically", auto, {
                     auto = it; setAutoUpdateEnabled(context, it); if (it) { daily = true; setDailyCheckEnabled(context, true) }; scheduleDailyCheck(context)

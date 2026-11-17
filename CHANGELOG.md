@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.19
+
+- New setting: update on mobile data too, instead of waiting for Wi-Fi
+
 ## v0.5.18
 
 - Text size and accent colour chosen in Control Room now apply here

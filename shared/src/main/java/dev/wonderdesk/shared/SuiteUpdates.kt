@@ -474,7 +474,7 @@ fun autoUpdate(context: Context, updates: List<Pair<SuiteEntry, SuiteRelease>>, 
         runCatching { nm.notify(3, android.app.Notification.Builder(context, CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("Updating Wonderdesk apps")
             .setContentText(updates.joinToString(", ") { it.first.name }).setProgress(0, 0, true).setOngoing(true).build()) }
     }
-    if (!force && cm?.isActiveNetworkMetered == true) { notifyUpdatesAvailable(context, updates.map { it.first.name }); return }
+    if (!force && cm?.isActiveNetworkMetered == true && !context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).getBoolean("meteredOk", false)) { notifyUpdatesAvailable(context, updates.map { it.first.name }); return }
     val done = mutableListOf<String>(); val failed = mutableListOf<String>()
     // Apphub last, so updating itself doesn't stop the others.
     updates.sortedBy { it.first.pkg == context.packageName }.forEach { (e, rel) ->
