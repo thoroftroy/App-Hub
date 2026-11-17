@@ -1,5 +1,10 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.18
+
+- Text size and accent colour chosen in Control Room now apply here
+- New Rotate with the phone switch in Settings
+
 ## v0.5.17
 
 - Apps updated in the background now leave a notification listing each app, the version it came from and what changed
