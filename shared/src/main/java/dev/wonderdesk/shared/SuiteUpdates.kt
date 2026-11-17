@@ -423,7 +423,7 @@ fun scheduleDailyCheck(context: Context) {
     am.cancel(pi)
     // Hourly safety net, fully built in: plain GitHub release checks, no outside services.
     // Inexact so Android batches it with other work.
-    val every = AlarmManager.INTERVAL_HOUR
+    val every = AlarmManager.INTERVAL_HOUR * context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).getInt("checkHours", 1).coerceIn(1, 24)
     am.setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + every, every, pi)
 }
 

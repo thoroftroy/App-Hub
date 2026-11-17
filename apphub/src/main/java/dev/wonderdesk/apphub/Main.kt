@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -255,6 +256,11 @@ fun AppHub(startTab: String?) {
                 }, subtitle = "Hourly check that tells you when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
                 PanelDivider()
                 val up = remember { context.getSharedPreferences("suite-updates", android.content.Context.MODE_PRIVATE) }
+                var hrs by remember { mutableIntStateOf(up.getInt("checkHours", 1)) }
+                Column(Modifier.padding(16.dp, 10.dp)) { Text("Check every", style = MaterialTheme.typography.labelLarge)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf(1 to "Hour", 3 to "3 hours", 6 to "6 hours", 24 to "Day").forEach { (v, n) -> Chip(n, hrs == v, { hrs = v; up.edit().putInt("checkHours", v).apply(); if (daily) scheduleDailyCheck(context) }) } }
+                    Text("Longer gaps use less battery.", style = MaterialTheme.typography.bodySmall, color = wonderPalette().secondaryText) }
+                PanelDivider()
                 var metered by remember { mutableStateOf(up.getBoolean("meteredOk", false)) }
                 SwitchRow("Update on mobile data too", metered, { metered = it; up.edit().putBoolean("meteredOk", it).apply() }, subtitle = "Off waits for Wi-Fi and just tells you an update is ready", icon = WonderIcons.Wifi, tint = Color(0xFF2E9E44))
                 PanelDivider()

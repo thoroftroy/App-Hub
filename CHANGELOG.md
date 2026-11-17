@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.20
+
+- New setting: how often to check for updates (hour, 3 hours, 6 hours or day), hourly by default
+
 ## v0.5.19
 
 - New setting: update on mobile data too, instead of waiting for Wi-Fi
