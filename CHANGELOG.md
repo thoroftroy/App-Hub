@@ -1,5 +1,11 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.14
+
+- Releases now push the phone at once when instant alerts are set up. Until then the hourly check still finds them
+- Background checks are hourly again. The switch in settings turns them off entirely
+- New Instant release alerts row in settings shows the state and the setup steps
+
 ## v0.5.13
 
 - Checks run by themselves every 15 minutes. A tiny ping published with each release wakes the next check early so new versions surface without opening the app

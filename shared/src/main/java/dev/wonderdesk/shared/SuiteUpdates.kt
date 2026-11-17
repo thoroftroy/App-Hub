@@ -451,10 +451,10 @@ fun scheduleDailyCheck(context: Context) {
     val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val pi = checkPendingIntent(context)
     am.cancel(pi)
-    // Checks every 15 minutes. Each check is one tiny ping request unless a release
-    // was just published, so new releases surface without opening the app.
+    // Hourly safety net. Instant alerts arrive over push when set up, so this
+    // only matters for phones without push or before the Firebase file ships.
     // Inexact so Android batches it with other work.
-    val every = AlarmManager.INTERVAL_FIFTEEN_MINUTES
+    val every = AlarmManager.INTERVAL_HOUR
     am.setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + every, every, pi)
 }
 

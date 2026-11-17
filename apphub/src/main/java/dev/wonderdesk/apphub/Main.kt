@@ -56,7 +56,7 @@ private val APP_NEEDS by lazy { listOf(
 ) }
 
 private const val ABOUT = "Wonderdesk Apphub installs and updates every Wonderdesk app straight from its official GitHub releases. " +
-    "Each download is checked to be the right app before Android asks you to confirm the install. It can also check by itself every 15 minutes and notify you the moment an update is out, with an Update now button."
+    "Each download is checked to be the right app before Android asks you to confirm the install. It checks by itself every hour, and instant alerts wake the phone the moment a release lands once they are set up, with an Update now button."
 
 /** What App Hub is doing for one app. */
 sealed class Job {
@@ -206,7 +206,10 @@ fun AppHub(startTab: String?) {
             Hub.lastChecked = lastCheckTime(context)
             Hub.refreshInstalled(context)
             Hub.check(context, force = false) { toastRef(it) }
-            if (dailyCheckEnabled(context)) scheduleDailyCheck(context)
+            if (dailyCheckEnabled(context)) {
+                scheduleDailyCheck(context)
+                Hub.scope.launch(Dispatchers.IO) { runCatching { ensurePush(context) } }
+            }
         }
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && daily) {
             permission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -229,8 +232,16 @@ fun AppHub(startTab: String?) {
         settings = {
             Panel(title = "Updates") {
                 SwitchRow("Check for updates by itself", daily, {
-                    daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context)
-                }, subtitle = "Checks every 15 minutes and tells you when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
+                    daily = it; setDailyCheckEnabled(context, it); if (it) { scheduleDailyCheck(context); Hub.scope.launch(Dispatchers.IO) { runCatching { ensurePush(context) } } } else cancelDailyCheck(context)
+                }, subtitle = "Hourly check plus an instant push when a release lands", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
+                PanelDivider()
+                var pushHelp by remember { mutableStateOf(false) }
+                ListRow("Instant release alerts", subtitle = if (pushActive(context)) "On. Releases wake the phone at once" else "Off until the Firebase file is bundled",
+                    icon = WonderIcons.Bolt, tint = Color(0xFFE39A12), chevron = true, onClick = { pushHelp = true })
+                if (pushHelp) WonderDialog(onDismissRequest = { pushHelp = false }, title = { Text("Instant release alerts") }, text = {
+                    Text("Off until the Firebase file is bundled. To switch on: make a free Firebase project, add Android app dev.wonderdesk.apphub, and send the google-services.json plus a service account key with Firebase Cloud Messaging Admin. Add that key as FIREBASE_SERVICE_ACCOUNT plus FIREBASE_PROJECT_ID in every suite repo. Then the release hook is bundled and shipped, and each published release wakes the phone at once. Until then the hourly check still finds updates.",
+                        style = MaterialTheme.typography.bodyMedium)
+                }, confirmButton = { TextButton(onClick = { pushHelp = false }) { Text("Got it") } })
                 PanelDivider()
                 var auto by remember { mutableStateOf(autoUpdateEnabled(context)) }
                 SwitchRow("Install updates automatically", auto, {

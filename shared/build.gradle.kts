@@ -19,6 +19,10 @@ dependencies {
     api("androidx.media3:media3-exoplayer:1.4.1")
     api("androidx.media3:media3-session:1.4.1")
     api("androidx.media3:media3-ui:1.4.1")
+    // Instant release alerts. No google-services plugin on purpose: without the
+    // bundled Firebase file the build still works and push simply stays off.
+    api(platform("com.google.firebase:firebase-bom:33.7.0"))
+    api("com.google.firebase:firebase-messaging")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

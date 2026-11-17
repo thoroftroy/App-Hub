@@ -9,7 +9,7 @@ class UpdateCheckReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            if (dailyCheckEnabled(app)) scheduleDailyCheck(app)
+            if (dailyCheckEnabled(app)) { scheduleDailyCheck(app); Thread { runCatching { ensurePush(app) } }.start() }
             return
         }
         if (intent.action == UPDATE_NOW_ACTION) { AutoUpdateJob.schedule(app, now = true); return }
