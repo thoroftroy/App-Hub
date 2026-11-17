@@ -160,8 +160,11 @@ object Hub {
         }
     }
 
-    /** Called on resume: picks up installs that finished while Apphub was in the background. */
-    fun onResume(context: Context, @Suppress("UNUSED_PARAMETER") toast: (String) -> Unit) { refreshInstalled(context) }
+    /** Called on resume: picks up installs that finished while Apphub was in the background, and checks for updates if the last check is a while ago. */
+    fun onResume(context: Context, @Suppress("UNUSED_PARAMETER") toast: (String) -> Unit) {
+        refreshInstalled(context)
+        if (System.currentTimeMillis() - lastCheckTime(context) > 15 * 60_000L) check(context, force = false)
+    }
 }
 
 enum class Status { NotInstalled, Update, Current }

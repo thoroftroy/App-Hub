@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.12
+
+- Opening App Hub now checks for updates when the last check is a while ago, so new releases show up without tapping refresh
+
 ## v0.5.11
 
 - Updates are found sooner: Apphub checks every hour, and tells you once as soon as a new version is out
