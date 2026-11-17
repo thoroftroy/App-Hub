@@ -56,7 +56,7 @@ private val APP_NEEDS by lazy { listOf(
 ) }
 
 private const val ABOUT = "Wonderdesk Apphub installs and updates every Wonderdesk app straight from its official GitHub releases. " +
-    "Each download is checked to be the right app before Android asks you to confirm the install. It can also check every hour and notify you the moment an update is out, with an Update now button."
+    "Each download is checked to be the right app before Android asks you to confirm the install. It can also check by itself every 15 minutes and notify you the moment an update is out, with an Update now button."
 
 /** What App Hub is doing for one app. */
 sealed class Job {
@@ -228,18 +228,22 @@ fun AppHub(startTab: String?) {
         },
         settings = {
             Panel(title = "Updates") {
-                SwitchRow("Check for updates every hour", daily, {
+                SwitchRow("Check for updates by itself", daily, {
                     daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context)
-                }, subtitle = "Sends a notification when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
+                }, subtitle = "Checks every 15 minutes and tells you when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
                 PanelDivider()
                 var auto by remember { mutableStateOf(autoUpdateEnabled(context)) }
                 SwitchRow("Install updates automatically", auto, {
                     auto = it; setAutoUpdateEnabled(context, it); if (it) { daily = true; setDailyCheckEnabled(context, true) }; scheduleDailyCheck(context)
-                }, subtitle = if (SilentInstall.silentPossible) "Checks every 6 hours on Wi-Fi and updates in the background, no taps needed. The first update of an app Apphub didn't install may ask once"
-                    else "Downloads updates in the background; Android asks you to confirm each one on this version", icon = WonderIcons.SystemUpdate, tint = Color(0xFF1E7FE8))
+                }, subtitle = if (SilentInstall.silentPossible) "On WiFi it updates in the background with no taps needed. The first update of an app Apphub did not install may ask once"
+                    else "Downloads updates in the background. Android asks you to confirm each one on this version", icon = WonderIcons.SystemUpdate, tint = Color(0xFF1E7FE8))
                 PanelDivider()
                 ListRow("Allow installing apps", subtitle = if (canInstallPackages(context)) "Allowed" else "Needed to install and update", icon = WonderIcons.Security, tint = Color(0xFF2E9E44), chevron = true,
                     onClick = { openInstallPermissionSettings(context) })
+                PanelDivider()
+                ListRow("Let checks run in the background", subtitle = if (isBatteryExempt(context)) "Allowed. Checks keep running after a restart" else "Needed so checks keep running after a restart",
+                    icon = WonderIcons.BatteryFull, tint = Color(0xFF7A7F87), chevron = true,
+                    onClick = { openBatterySettings(context) })
                 PanelDivider()
                 ListRow("Stop the “Scan app” prompts", subtitle = "Those come from Google Play Protect, not Android. Switch off “Scan apps with Play Protect” and Update all needs one tap. (Android may still ask once per app, the first time Apphub updates it.)",
                     icon = WonderIcons.Shield, tint = Color(0xFFE39A12), chevron = true, onClick = {

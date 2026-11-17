@@ -90,7 +90,11 @@ class AutoUpdateJob : android.app.job.JobService() {
     override fun onStartJob(p: android.app.job.JobParameters): Boolean {
         worker = Thread {
             val force = p.transientExtras.getBoolean("force", false)
-            runCatching { val u = checkAllForUpdates(applicationContext, if (force) 60_000L else 50 * 60_000L); if (u.isNotEmpty()) autoUpdate(applicationContext, u, force) }
+            runCatching {
+                val pinged = runCatching { checkReleasePings(applicationContext) }.getOrDefault(false)
+                val u = checkAllForUpdates(applicationContext, if (force || pinged) 60_000L else 50 * 60_000L)
+                if (u.isNotEmpty()) autoUpdate(applicationContext, u, force)
+            }
             jobFinished(p, false)
         }.also { it.start() }
         return true

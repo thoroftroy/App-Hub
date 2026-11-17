@@ -1,5 +1,11 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.13
+
+- Checks run by themselves every 15 minutes. A tiny ping published with each release wakes the next check early so new versions surface without opening the app
+- The update check survives a restart and an App Hub update. A new background row explains the battery setting that keeps checks running
+- Opening App Hub still checks when the last check is a while ago
+
 ## v0.5.12
 
 - Opening App Hub now checks for updates when the last check is a while ago, so new releases show up without tapping refresh
