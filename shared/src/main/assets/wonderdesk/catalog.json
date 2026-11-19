@@ -441,6 +441,29 @@
         "cli",
         "remote"
       ]
+    },
+    {
+      "id": "polaris",
+      "name": "Polaris",
+      "generic": "Web Browser",
+      "aliases": [
+        "browser",
+        "web browser",
+        "internet",
+        "web",
+        "firefox",
+        "chrome",
+        "safari",
+        "surf"
+      ],
+      "keywords": [
+        "browse",
+        "web",
+        "internet",
+        "private",
+        "adblock",
+        "extensions"
+      ]
     }
   ]
 }

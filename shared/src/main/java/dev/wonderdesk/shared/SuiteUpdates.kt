@@ -36,6 +36,7 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Packrat", "dev.wonderdesk.packrat", "Packrat", "Open, browse, extract and create archives"),
     SuiteEntry("Pages", "dev.wonderdesk.pages", "Pages", "PDF reader with highlights, notes and PDF making"),
     SuiteEntry("Pulse", "dev.wonderdesk.pulse", "Pulse", "Live graphs, device details and app usage"),
+    SuiteEntry("Polaris", "dev.wonderdesk.polaris", "Polaris", "The Wonderdesk web browser: Firefox engine, uBlock Origin, private Veil tabs and extensions"),
     SuiteEntry("Ripple", "dev.wonderdesk.ripple", "Ripple", "Your computer's terminal on your phone, at home or away"),
     SuiteEntry("Safekeeper", "dev.wonderdesk.safekeeper", "Safekeeper", "Automatic snapshots and verified backups"),
     SuiteEntry("Scribble", "dev.wonderdesk.scribble", "Scribble", "Markdown notes, linked pages and sketches"),

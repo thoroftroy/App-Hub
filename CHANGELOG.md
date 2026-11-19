@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.21
+
+- Polaris, the Wonderdesk web browser, is now in the list: install it and keep it updated from here
+
 ## v0.5.20
 
 - New setting: how often to check for updates (hour, 3 hours, 6 hours or day), hourly by default
