@@ -104,7 +104,7 @@ object Hub {
         checking = true; checkedCount = 0
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
-                checkReleases(context.applicationContext, force) { _, _ -> scope.launch { checkedCount++ } }
+                checkReleases(context.applicationContext, force) { _, _ -> scope.launch(Dispatchers.Main) { checkedCount++ } }
             }
             releases = outcome.releases
             failures = outcome.failures

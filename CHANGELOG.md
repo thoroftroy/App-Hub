@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.23
+
+- Checking for updates is much faster: every app is checked at the same time instead of one after another, and the pause between apps is gone
+
 ## v0.5.22
 
 - New Wonderdesk apps now appear in the list by themselves, with their own icon, without needing a new App Hub: the list is read from the App Hub project online and saved for offline use

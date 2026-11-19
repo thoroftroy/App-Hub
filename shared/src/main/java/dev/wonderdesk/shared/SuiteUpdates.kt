@@ -189,8 +189,8 @@ class NotFoundException(message: String) : IOException(message)
 private const val USER_AGENT = "Wonderdesk-App-Hub/1.0 (Android)"
 
 private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
-    connectTimeout = 15_000
-    readTimeout = 30_000
+    connectTimeout = 8_000
+    readTimeout = 15_000
     instanceFollowRedirects = false
     setRequestProperty("User-Agent", USER_AGENT)
 }
@@ -365,32 +365,43 @@ fun installApk(context: Context, file: File) {
  * Fresh cached answers (under [maxAgeMs]) are reused. Stops early and keeps the cache if rate limited.
  */
 fun checkReleases(context: Context, force: Boolean, maxAgeMs: Long = 20 * 60_000L, onEach: (SuiteEntry, SuiteRelease?) -> Unit = { _, _ -> }): CheckOutcome {
-    SuiteCatalog.load(context); SuiteCatalog.refresh(context)
-    val found = mutableMapOf<String, SuiteRelease>()
-    val failed = mutableMapOf<String, String>()
-    var limited: RateLimitedException? = null
-    for (e in SUITE_ENTRIES) {
+    SuiteCatalog.load(context)
+    // The live app list and the releases are fetched together, not one after the other.
+    val listJob = Thread { SuiteCatalog.refresh(context) }.also { it.start() }
+    val found = java.util.concurrent.ConcurrentHashMap<String, SuiteRelease>()
+    val failed = java.util.concurrent.ConcurrentHashMap<String, String>()
+    val limitBox = java.util.concurrent.atomic.AtomicReference<RateLimitedException?>(null)
+    val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+    fun one(e: SuiteEntry) {
         val cached = cachedRelease(context, e.pkg)
         val age = System.currentTimeMillis() - cachedAt(context, e.pkg)
-        if (!force && cached != null && age < maxAgeMs) { found[e.pkg] = cached; onEach(e, cached); continue }
-        if (limited != null) { cached?.let { found[e.pkg] = it }; continue }
+        if (!force && cached != null && age < maxAgeMs) { found[e.pkg] = cached; onEach(e, cached); return }
+        if (limitBox.get() != null) { cached?.let { found[e.pkg] = it }; return }
         try {
             val rel = fetchLatestRelease(e.repo)
             cacheRelease(context, e.pkg, rel)
             found[e.pkg] = rel
             onEach(e, rel)
         } catch (ex: RateLimitedException) {
-            limited = ex
+            limitBox.set(ex)
             cached?.let { found[e.pkg] = it }
         } catch (ex: Exception) {
             failed[e.pkg] = ex.message ?: "Couldn't check."
             cached?.let { found[e.pkg] = it }
             onEach(e, cached)
         }
-        Thread.sleep(250)
     }
+    // Apps already known from the saved list start at once; ones the live list adds follow when it arrives.
+    val done = HashSet<String>()
+    val jobs = ArrayList<java.util.concurrent.Future<*>>()
+    fun submit(list: List<SuiteEntry>) { for (e in list) if (done.add(e.pkg)) jobs.add(pool.submit { one(e) }) }
+    submit(SUITE_ENTRIES)
+    runCatching { listJob.join(8000) }
+    submit(SUITE_ENTRIES)
+    for (j in jobs) runCatching { j.get() }
+    pool.shutdown()
     prefs(context).edit().putLong(LAST_CHECK_KEY, System.currentTimeMillis()).apply()
-    return CheckOutcome(found, failed, limited?.message)
+    return CheckOutcome(found.toMap(), failed.toMap(), limitBox.get()?.message)
 }
 
 data class CheckOutcome(val releases: Map<String, SuiteRelease>, val failures: Map<String, String>, val rateLimitMessage: String?)
