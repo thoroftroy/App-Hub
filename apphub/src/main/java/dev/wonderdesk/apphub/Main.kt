@@ -179,10 +179,12 @@ fun suiteIcon(e: SuiteEntry): ImageBitmap {
     val ours = e.pkg.startsWith("dev.wonderdesk.") && Hub.installed[e.pkg] != null
     val installed = if (ours) rememberSuiteArt(e.pkg, 192) else null
     val res = remember(e.id) { context.resources.getIdentifier("suite_${e.id}", "drawable", context.packageName) }
+    // Apps added through the live list bring their own icon, saved when the list was fetched.
+    val downloaded = remember(e.id, Hub.releases.size) { SuiteCatalog.iconFile(context, e.id).takeIf { it.isFile } }
     // Decoded off the main thread and cached, so scrolling the list never stutters.
     val bundled = produceState(ArtCache.map.get("bundled:${e.id}"), e.id) {
         if (value == null) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { fitSquare(trimTransparent(android.graphics.BitmapFactory.decodeResource(context.resources, if (res != 0) res else R.drawable.suite_apphub)), 192).asImageBitmap() }.getOrNull()?.also { ArtCache.map.put("bundled:${e.id}", it) }
+            runCatching { fitSquare(trimTransparent(if (res == 0 && downloaded != null) android.graphics.BitmapFactory.decodeFile(downloaded.path) else android.graphics.BitmapFactory.decodeResource(context.resources, if (res != 0) res else R.drawable.suite_apphub)), 192).asImageBitmap() }.getOrNull()?.also { ArtCache.map.put("bundled:${e.id}", it) }
         }
     }.value
     return installed ?: bundled ?: ImageBitmap.imageResource(R.drawable.suite_apphub)
@@ -191,6 +193,7 @@ fun suiteIcon(e: SuiteEntry): ImageBitmap {
 @Composable
 fun AppHub(startTab: String?) {
     val context = LocalContext.current
+    SuiteCatalog.load(context)
     val owner = LocalLifecycleOwner.current
     var tab by rememberSaveable { mutableStateOf(startTab?.takeIf { it == "updates" } ?: "suite") }
     // Apps that were updated in the background since you last looked, with what changed.

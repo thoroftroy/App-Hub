@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.5.22
+
+- New Wonderdesk apps now appear in the list by themselves, with their own icon, without needing a new App Hub: the list is read from the App Hub project online and saved for offline use
+
 ## v0.5.21
 
 - Polaris, the Wonderdesk web browser, is now in the list: install it and keep it updated from here

@@ -19,7 +19,7 @@ class UpdatesWidget : AppWidgetProvider() {
         @Volatile private var checking = false
         fun build(c: Context, id: Int): android.widget.RemoteViews {
             val look = runCatching { WidgetLook.valueOf(WidgetPrefs(c, id).str("look", "GLASS")) }.getOrDefault(WidgetLook.GLASS)
-            val updates = SUITE_ENTRIES.mapNotNull { e -> val inst = installedVersion(c, e.pkg) ?: return@mapNotNull null
+            SuiteCatalog.load(c); val updates = SUITE_ENTRIES.mapNotNull { e -> val inst = installedVersion(c, e.pkg) ?: return@mapNotNull null
                 cachedRelease(c, e.pkg)?.takeIf { compareVersions(it.version, inst) > 0 }?.let { e } }
             val last = lastCheckTime(c)
             val open = widgetOpen(c, MainActivity::class.java, 9700 + id % 100)

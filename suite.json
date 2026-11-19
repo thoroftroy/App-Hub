@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Polaris",
+    "pkg": "dev.wonderdesk.polaris",
+    "repo": "Polaris",
+    "tagline": "The Wonderdesk web browser: Firefox engine, uBlock Origin, private Veil tabs and extensions",
+    "icon": "https://raw.githubusercontent.com/thoroftroy/Polaris/main/shared/src/main/res/drawable-nodpi/wonderdesk_polaris_icon.png"
+  }
+]

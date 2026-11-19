@@ -21,9 +21,9 @@ import org.json.JSONObject
 const val SUITE_GITHUB_OWNER = "thoroftroy"
 
 /** Every installable suite app and the GitHub repo that publishes its releases. */
-data class SuiteEntry(val name: String, val pkg: String, val repo: String, val tagline: String = "", val id: String = pkg.substringAfterLast('.'))
+data class SuiteEntry(val name: String, val pkg: String, val repo: String, val tagline: String = "", val id: String = pkg.substringAfterLast('.'), val iconUrl: String = "")
 
-val SUITE_ENTRIES = listOf(
+private val BUILTIN_ENTRIES = listOf(
     SuiteEntry("Abacus", "dev.wonderdesk.abacus", "Abacus", "Scientific calculator with algebra, graphing and unit conversion"),
     SuiteEntry("Beacon", "dev.wonderdesk.beacon", "Beacon", "Search your apps, contacts, settings and the web from one box"),
     SuiteEntry("Bliss Player", "com.blissplayer.music.debug", "BlissPlayer", "Music player with even loudness, themes and a retro deck", "blissplayer"),
@@ -46,7 +46,53 @@ val SUITE_ENTRIES = listOf(
     SuiteEntry("Wonderdesk Apphub", "dev.wonderdesk.apphub", "App-Hub", "Install and update every Wonderdesk app", "apphub"),
 )
 
-val SUITE_PKG_SET = SUITE_ENTRIES.map { it.pkg }.toSet()
+/**
+ * The apps App Hub offers: the ones built in, plus whatever the live list (suite.json in the App-Hub repo on GitHub)
+ * adds or corrects. A new app only needs a line in that file; the Hub picks it up by itself.
+ */
+object SuiteCatalog {
+    const val URL = "https://raw.githubusercontent.com/$SUITE_GITHUB_OWNER/App-Hub/main/suite.json"
+    @Volatile private var live: List<SuiteEntry> = emptyList()
+    @Volatile private var loaded = false
+
+    fun all(): List<SuiteEntry> {
+        val byPkg = LinkedHashMap<String, SuiteEntry>()
+        BUILTIN_ENTRIES.forEach { byPkg[it.pkg] = it }
+        live.forEach { byPkg[it.pkg] = it }
+        return byPkg.values.sortedBy { it.name.lowercase() }
+    }
+
+    private fun parse(text: String): List<SuiteEntry> = runCatching {
+        val a = org.json.JSONArray(text)
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o ->
+            val pkg = o.optString("pkg"); val name = o.optString("name"); val repo = o.optString("repo")
+            if (pkg.isBlank() || name.isBlank() || repo.isBlank()) null else SuiteEntry(name, pkg, repo, o.optString("tagline"), o.optString("id").ifBlank { pkg.substringAfterLast('.') }, o.optString("icon"))
+        } }
+    }.getOrDefault(emptyList())
+
+    private fun file(c: Context) = File(c.filesDir, "suite.json")
+    fun iconFile(c: Context, id: String) = File(File(c.filesDir, "suite-icons"), "$id.png")
+
+    /** Reads the saved copy of the live list (instant, no network). */
+    fun load(c: Context) { if (!loaded) { loaded = true; runCatching { if (file(c).isFile) live = parse(file(c).readText()) } } }
+
+    /** Downloads the live list and the icons of apps that are not installed. Quietly does nothing offline. */
+    fun refresh(c: Context) {
+        runCatching {
+            val text = fetchText(URL)
+            val list = parse(text)
+            if (list.isEmpty()) return
+            file(c).writeText(text); live = list; loaded = true
+            for (e in list) if (e.iconUrl.isNotBlank() && !iconFile(c, e.id).isFile) runCatching {
+                val f = iconFile(c, e.id); f.parentFile?.mkdirs()
+                val conn = open(e.iconUrl); f.writeBytes(conn.inputStream.use { it.readBytes() })
+            }
+        }
+    }
+}
+
+val SUITE_ENTRIES: List<SuiteEntry> get() = SuiteCatalog.all()
+val SUITE_PKG_SET: Set<String> get() = SUITE_ENTRIES.map { it.pkg }.toSet()
 
 /** Suite entries not on the phone whose name matches the query. Pure for testing. */
 fun missingSuiteEntries(installedPkgs: Set<String>, query: String): List<SuiteEntry> =
@@ -319,6 +365,7 @@ fun installApk(context: Context, file: File) {
  * Fresh cached answers (under [maxAgeMs]) are reused. Stops early and keeps the cache if rate limited.
  */
 fun checkReleases(context: Context, force: Boolean, maxAgeMs: Long = 20 * 60_000L, onEach: (SuiteEntry, SuiteRelease?) -> Unit = { _, _ -> }): CheckOutcome {
+    SuiteCatalog.load(context); SuiteCatalog.refresh(context)
     val found = mutableMapOf<String, SuiteRelease>()
     val failed = mutableMapOf<String, String>()
     var limited: RateLimitedException? = null
