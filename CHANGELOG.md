@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.0
+
+- Relay, the new all-in-one messaging inbox, is now listed for install and updates
+
 ## v0.5.23
 
 - Checking for updates is much faster: every app is checked at the same time instead of one after another, and the pause between apps is gone
