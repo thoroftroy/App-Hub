@@ -464,6 +464,31 @@
         "adblock",
         "extensions"
       ]
+    },
+    {
+      "id": "relay",
+      "name": "Relay",
+      "generic": "Messages",
+      "aliases": [
+        "messages",
+        "messaging",
+        "texts",
+        "sms",
+        "whatsapp",
+        "telegram",
+        "discord",
+        "messenger",
+        "chat",
+        "chats",
+        "inbox"
+      ],
+      "keywords": [
+        "messages",
+        "chat",
+        "sms",
+        "inbox",
+        "relay"
+      ]
     }
   ]
 }
