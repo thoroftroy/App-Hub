@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.3
+
+- Every app window now has the animated scene behind it, in the app's own colour (for example orange water in Abacus, green in Pulse, purple in Scribble), following your Aqua, Bliss or Super look and the real sunrise and sunset. Motion Reduced shows a still picture and Off turns it off
+
 ## v0.6.2
 
 - App icons now come from each app's own repository, so new apps show their own icon before they are installed and changed icons appear without updating
