@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.7
+
+- The animated background is now drawn directly on the screen at full sharpness instead of a small picture stretched up, so it is smooth and no longer looks pixelated; the grain over it is much subtler, and long tab names (like Feedback) shrink to fit instead of being cut off
+
 ## v0.6.6
 
 - Cinema is no longer offered as a new install, because it is part of Memories now. Phones that still have Cinema see its final update
