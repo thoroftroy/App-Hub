@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.6
+
+- Cinema is no longer offered as a new install, because it is part of Memories now. Phones that still have Cinema see its final update
+
 ## v0.6.5
 
 - At night the animated background gets a stronger wash, so text stays easy to read on dark scenes
