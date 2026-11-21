@@ -28,7 +28,6 @@ private val BUILTIN_ENTRIES = listOf(
     SuiteEntry("Beacon", "dev.wonderdesk.beacon", "Beacon", "Search your apps, contacts, settings and the web from one box"),
     SuiteEntry("Bliss Player", "com.blissplayer.music.debug", "BlissPlayer", "Music player with even loudness, themes and a retro deck", "blissplayer"),
     SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle", "Calendar with tasks, reminders, widgets and Google sync"),
-    SuiteEntry("Cinema", "dev.wonderdesk.cinema", "Cinema", "Video player and editor for every video on your phone"),
     SuiteEntry("Control Room", "dev.wonderdesk.controlroom", "Control-Room", "Quick controls, every setting and the suite-wide look"),
     SuiteEntry("Echo", "dev.wonderdesk.echo", "Echo", "Record, clean up and edit voice and sound with one-tap Studio Voice"),
     SuiteEntry("Launcher", "dev.wonderdesk.launcher", "Wonderdesk-Launcher", "An Aqua home screen with Dock, Launchpad and widgets"),

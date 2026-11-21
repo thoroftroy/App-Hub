@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.9
+
+- Cinema is gone: it is part of Memories, so it is no longer listed anywhere
+
 ## v0.6.8
 
 - The symbols drifting in the background are smaller and fainter so they no longer crowd text; selected segments and chips are readable in every look (including Super); the warning banner at the top has a solid backing so its text is easy to read
