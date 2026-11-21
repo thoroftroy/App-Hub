@@ -399,7 +399,8 @@ private fun SuiteRow(e: SuiteEntry, modifier: Modifier, onOpen: () -> Unit) {
 private fun SuiteTab(open: (SuiteEntry) -> Unit) {
     val context = LocalContext.current
     val toast = LocalToast.current
-    val missing = SUITE_ENTRIES.filter { Hub.status(it) == Status.NotInstalled }
+    // Cinema is part of Memories now: it is only listed for phones that still have it (to get its final update), never offered as a new install.
+    val missing = SUITE_ENTRIES.filter { Hub.status(it) == Status.NotInstalled && it.pkg != "dev.wonderdesk.cinema" }
     val have = SUITE_ENTRIES.filter { Hub.status(it) != Status.NotInstalled }
     LazyColumn(Modifier.fillMaxSize(), state = rememberTabTopList(), contentPadding = PaddingValues(16.dp)) {
         item {
