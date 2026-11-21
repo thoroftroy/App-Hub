@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.1
+
+- Removed Relay from the list of suite apps
+
 ## v0.6.0
 
 - Relay, the new all-in-one messaging inbox, is now listed for install and updates

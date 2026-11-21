@@ -25,13 +25,12 @@
     "scrapbook": "0.2.0",
     "workshop": "0.2.0",
     "printshop": "0.2.0",
-    "app-hub": "0.6.0",
+    "app-hub": "0.6.1",
     "welcome": "0.2.0",
     "guidebook": "0.2.0",
     "checkup": "0.2.0",
     "fetch": "0.2.0",
-    "launcher": "0.2.8",
-    "relay": "0.1.0"
+    "launcher": "0.2.8"
   },
   "tools": {
     "installer": "0.2.2",

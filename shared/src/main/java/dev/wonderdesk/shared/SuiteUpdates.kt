@@ -25,7 +25,6 @@ data class SuiteEntry(val name: String, val pkg: String, val repo: String, val t
 
 private val BUILTIN_ENTRIES = listOf(
     SuiteEntry("Abacus", "dev.wonderdesk.abacus", "Abacus", "Scientific calculator with algebra, graphing and unit conversion"),
-    SuiteEntry("Relay", "dev.wonderdesk.relay", "Relay", "One inbox for Discord, WhatsApp, Telegram, texts and more"),
     SuiteEntry("Beacon", "dev.wonderdesk.beacon", "Beacon", "Search your apps, contacts, settings and the web from one box"),
     SuiteEntry("Bliss Player", "com.blissplayer.music.debug", "BlissPlayer", "Music player with even loudness, themes and a retro deck", "blissplayer"),
     SuiteEntry("Chronicle", "dev.wonderdesk.chronicle", "Chronicle", "Calendar with tasks, reminders, widgets and Google sync"),
