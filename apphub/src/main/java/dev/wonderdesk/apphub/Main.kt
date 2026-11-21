@@ -187,7 +187,12 @@ fun suiteIcon(e: SuiteEntry): ImageBitmap {
             runCatching { fitSquare(trimTransparent(if (res == 0 && downloaded != null) android.graphics.BitmapFactory.decodeFile(downloaded.path) else android.graphics.BitmapFactory.decodeResource(context.resources, if (res != 0) res else R.drawable.suite_apphub)), 192).asImageBitmap() }.getOrNull()?.also { ArtCache.map.put("bundled:${e.id}", it) }
         }
     }.value
-    return installed ?: bundled ?: ImageBitmap.imageResource(R.drawable.suite_apphub)
+    // The newest icon from the app's own repo wins over the installed and bundled copies, so changes show up without updating.
+    val liveFile = remember(e.id, Hub.checking, Hub.releases.size) { SuiteCatalog.liveIconFile(context, e.id).takeIf { it.isFile } }
+    val live = produceState<ImageBitmap?>(null, liveFile?.lastModified(), e.id) {
+        value = liveFile?.let { f -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { fitSquare(trimTransparent(android.graphics.BitmapFactory.decodeFile(f.path)), 192).asImageBitmap() }.getOrNull() } }
+    }.value
+    return live ?: installed ?: bundled ?: ImageBitmap.imageResource(R.drawable.suite_apphub)
 }
 
 @Composable

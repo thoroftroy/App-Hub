@@ -1,5 +1,10 @@
 # Wonderdesk Apphub changelog
 
+## v0.6.2
+
+- App icons now come from each app's own repository, so new apps show their own icon before they are installed and changed icons appear without updating
+- Fixed a gap above the keyboard in screens with a bottom tab bar: the tab bar now steps aside while you type, so you can see what you are writing
+
 ## v0.6.1
 
 - Removed Relay from the list of suite apps

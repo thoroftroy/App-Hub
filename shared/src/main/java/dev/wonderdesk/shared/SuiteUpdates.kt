@@ -73,6 +73,25 @@ object SuiteCatalog {
     private fun file(c: Context) = File(c.filesDir, "suite.json")
     fun iconFile(c: Context, id: String) = File(File(c.filesDir, "suite-icons"), "$id.png")
 
+    fun liveIconFile(c: Context, id: String) = File(File(c.filesDir, "suite-icons-live"), "$id.png")
+
+    /**
+     * Fetches every app's current icon straight from its GitHub repo, so new apps show their own icon before they are
+     * installed and a changed icon shows up without updating the app. Refreshed at most every six hours per icon.
+     */
+    fun refreshIcons(c: Context) {
+        for (e in all()) runCatching {
+            val f = liveIconFile(c, e.id)
+            if (f.isFile && System.currentTimeMillis() - f.lastModified() < 6 * 3_600_000L) return@runCatching
+            f.parentFile?.mkdirs()
+            val url = "https://raw.githubusercontent.com/$SUITE_GITHUB_OWNER/${e.repo}/main/shared/src/main/res/drawable-nodpi/wonderdesk_${e.id}_icon.png"
+            val conn = open(url)
+            if (conn.responseCode != 200) { if (f.isFile) f.setLastModified(System.currentTimeMillis()); return@runCatching }
+            val bytes = conn.inputStream.use { it.readBytes() }
+            if (bytes.size > 1000) f.writeBytes(bytes)
+        }
+    }
+
     /** Reads the saved copy of the live list (instant, no network). */
     fun load(c: Context) { if (!loaded) { loaded = true; runCatching { if (file(c).isFile) live = parse(file(c).readText()) } } }
 
@@ -367,7 +386,7 @@ fun installApk(context: Context, file: File) {
 fun checkReleases(context: Context, force: Boolean, maxAgeMs: Long = 20 * 60_000L, onEach: (SuiteEntry, SuiteRelease?) -> Unit = { _, _ -> }): CheckOutcome {
     SuiteCatalog.load(context)
     // The live app list and the releases are fetched together, not one after the other.
-    val listJob = Thread { SuiteCatalog.refresh(context) }.also { it.start() }
+    val listJob = Thread { SuiteCatalog.refresh(context); SuiteCatalog.refreshIcons(context) }.also { it.start() }
     val found = java.util.concurrent.ConcurrentHashMap<String, SuiteRelease>()
     val failed = java.util.concurrent.ConcurrentHashMap<String, String>()
     val limitBox = java.util.concurrent.atomic.AtomicReference<RateLimitedException?>(null)
