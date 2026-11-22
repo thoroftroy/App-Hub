@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.7.0
+
+- The background tells you how the suite stands: busy while it checks or installs, warm with falling arrows when updates are waiting, and a calm green with ticks when everything is up to date. Each finished install gets a little burst
+
 ## v0.6.9
 
 - Cinema is gone: it is part of Memories, so it is no longer listed anywhere

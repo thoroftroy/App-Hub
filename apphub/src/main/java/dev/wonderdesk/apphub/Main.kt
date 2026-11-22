@@ -245,6 +245,18 @@ fun AppHub(startTab: String?) {
         confirmButton = { TextButton(onClick = { report.forEach { forgetUpdate(context, it.pkg) }; report = emptyList() }) { Text("Got it") } })
     val updates = SUITE_ENTRIES.filter { Hub.status(it) == Status.Update }
     val entry = detail?.let { d -> SUITE_ENTRIES.find { it.pkg == d } }
+    // The scene tells you how the suite stands: busy while it checks or installs, warm with falling arrows when updates are waiting,
+    // a calm green with ticks when everything is up to date; each finished install gets a little burst.
+    val busy = Hub.jobs.isNotEmpty()
+    SceneMoodEffect(when {
+        busy -> SceneMood(hue = 205f, energy = 2.2f, glyphs = listOf("↓", "↓", "•", "⚙"))
+        Hub.checking -> SceneMood(energy = 1.6f, glyphs = listOf("↻", "•", "?"))
+        updates.isNotEmpty() -> SceneMood(hue = 36f, tint = android.graphics.Color.argb(70, 250, 180, 70), energy = 1.15f, glyphs = listOf("↓", "★", "•"))
+        Hub.lastChecked > 0 -> SceneMood(hue = 130f, tint = android.graphics.Color.argb(45, 90, 210, 120), energy = .8f, glyphs = listOf("✓", "•", "·"))
+        else -> SceneMood()
+    })
+    var jobsBefore by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Hub.jobs.size) { if (Hub.jobs.size < jobsBefore) WonderMood.celebrate(listOf("✓", "✦", "★")); jobsBefore = Hub.jobs.size }
     WonderApp(needs = APP_NEEDS, 
         appName = "Wonderdesk Apphub", about = ABOUT,
         tabs = if (entry != null) emptyList() else listOf(
