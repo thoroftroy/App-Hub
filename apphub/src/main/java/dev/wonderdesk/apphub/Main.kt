@@ -249,12 +249,17 @@ fun AppHub(startTab: String?) {
     // a calm green with ticks when everything is up to date; each finished install gets a little burst.
     val busy = Hub.jobs.isNotEmpty()
     SceneMoodEffect(when {
-        busy -> SceneMood(hue = 205f, energy = 2.2f, glyphs = listOf("↓", "↓", "•", "⚙"))
+        // Downloading: a box for each app on its way, and the stack at the bottom builds as the bytes arrive.
+        busy -> SceneMood(hue = 205f, energy = 2.2f, glyphs = listOf("↓", "↓", "•", "⚙"), level = Hub.jobs.values.filterIsInstance<Job.Downloading>().let { d ->
+            val total = d.sumOf { it.total }; if (total > 0) d.sumOf { it.done }.toFloat() / total else null })
         Hub.checking -> SceneMood(energy = 1.6f, glyphs = listOf("↻", "•", "?"))
         updates.isNotEmpty() -> SceneMood(hue = 36f, tint = android.graphics.Color.argb(70, 250, 180, 70), energy = 1.15f, glyphs = listOf("↓", "★", "•"))
         Hub.lastChecked > 0 -> SceneMood(hue = 130f, tint = android.graphics.Color.argb(45, 90, 210, 120), energy = .8f, glyphs = listOf("✓", "•", "·"))
         else -> SceneMood()
     })
+    SceneFeedScope()
+    // Waiting updates show as boxes drifting up (one each); busy, they hurry.
+    SideEffect { SceneFeed.count = (if (busy) Hub.jobs.size else updates.size).coerceAtMost(14); SceneFeed.active = busy }
     var jobsBefore by remember { mutableIntStateOf(0) }
     LaunchedEffect(Hub.jobs.size) { if (Hub.jobs.size < jobsBefore) WonderMood.celebrate(listOf("✓", "✦", "★")); jobsBefore = Hub.jobs.size }
     WonderApp(needs = APP_NEEDS, 
