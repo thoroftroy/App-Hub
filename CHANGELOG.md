@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.8.2
+
+- The Launcher's picture in App Hub now updates from its repo like every other app's, so a new Launcher icon shows up straight away instead of the old one
+
 ## v0.8.1
 
 - The moving background holds still while Battery Saver is on, so it uses next to no power then. It still changes with what the app is doing

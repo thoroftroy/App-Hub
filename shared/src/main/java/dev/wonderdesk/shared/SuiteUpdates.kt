@@ -83,7 +83,14 @@ object SuiteCatalog {
             val f = liveIconFile(c, e.id)
             if (f.isFile && System.currentTimeMillis() - f.lastModified() < 6 * 3_600_000L) return@runCatching
             f.parentFile?.mkdirs()
-            val url = "https://raw.githubusercontent.com/$SUITE_GITHUB_OWNER/${e.repo}/main/shared/src/main/res/drawable-nodpi/wonderdesk_${e.id}_icon.png"
+            // Most apps keep their icon in the shared kit; the Launcher keeps it in its own module. Bliss Player's repo has
+            // only a flat square launcher picture, so its installed or bundled icon is kept instead.
+            val path = when (e.id) {
+                "launcher" -> "launcher/src/main/res/drawable-nodpi/wonderdesk_icon.png"
+                "blissplayer" -> return@runCatching
+                else -> "shared/src/main/res/drawable-nodpi/wonderdesk_${e.id}_icon.png"
+            }
+            val url = "https://raw.githubusercontent.com/$SUITE_GITHUB_OWNER/${e.repo}/main/$path"
             val conn = open(url)
             if (conn.responseCode != 200) { if (f.isFile) f.setLastModified(System.currentTimeMillis()); return@runCatching }
             val bytes = conn.inputStream.use { it.readBytes() }
