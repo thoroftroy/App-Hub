@@ -278,7 +278,7 @@ fun AppHub(startTab: String?) {
             Panel(title = "Updates") {
                 SwitchRow("Check for updates by itself", daily, {
                     daily = it; setDailyCheckEnabled(context, it); if (it) scheduleDailyCheck(context) else cancelDailyCheck(context)
-                }, subtitle = "Hourly check that tells you when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C))
+                }, subtitle = "Hourly check that tells you when updates are ready", icon = WonderIcons.Notifications, tint = Color(0xFFE5483C), help = "Once a day App Hub quietly looks for new versions of your Wonderdesk apps and tells you when there are some.")
                 PanelDivider()
                 val up = remember { context.getSharedPreferences("suite-updates", android.content.Context.MODE_PRIVATE) }
                 var hrs by remember { mutableIntStateOf(up.getInt("checkHours", 1)) }
@@ -287,13 +287,13 @@ fun AppHub(startTab: String?) {
                     Text("Longer gaps use less battery.", style = MaterialTheme.typography.bodySmall, color = wonderPalette().secondaryText) }
                 PanelDivider()
                 var metered by remember { mutableStateOf(up.getBoolean("meteredOk", false)) }
-                SwitchRow("Update on mobile data too", metered, { metered = it; up.edit().putBoolean("meteredOk", it).apply() }, subtitle = "Off waits for Wi-Fi and just tells you an update is ready", icon = WonderIcons.Wifi, tint = Color(0xFF2E9E44))
+                SwitchRow("Update on mobile data too", metered, { metered = it; up.edit().putBoolean("meteredOk", it).apply() }, subtitle = "Off waits for Wi-Fi and just tells you an update is ready", icon = WonderIcons.Wifi, tint = Color(0xFF2E9E44), help = "Normally updates only download on Wi-Fi to save your data allowance. Turn this on to download them anywhere.")
                 PanelDivider()
                 var auto by remember { mutableStateOf(autoUpdateEnabled(context)) }
                 SwitchRow("Install updates automatically", auto, {
                     auto = it; setAutoUpdateEnabled(context, it); if (it) { daily = true; setDailyCheckEnabled(context, true) }; scheduleDailyCheck(context)
                 }, subtitle = if (SilentInstall.silentPossible) "On WiFi it updates in the background with no taps needed. The first update of an app Apphub did not install may ask once"
-                    else "Downloads updates in the background. Android asks you to confirm each one on this version", icon = WonderIcons.SystemUpdate, tint = Color(0xFF1E7FE8))
+                    else "Downloads updates in the background. Android asks you to confirm each one on this version", icon = WonderIcons.SystemUpdate, tint = Color(0xFF1E7FE8), help = "New versions are downloaded and installed for you. Android may still ask you to confirm each one.")
                 PanelDivider()
                 ListRow("Allow installing apps", subtitle = if (canInstallPackages(context)) "Allowed" else "Needed to install and update", icon = WonderIcons.Security, tint = Color(0xFF2E9E44), chevron = true,
                     onClick = { openInstallPermissionSettings(context) })

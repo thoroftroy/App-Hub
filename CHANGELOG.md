@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.8.3
+
+- More ? buttons: the settings that were not obvious now explain in a line or two what they do and why you might want them
+
 ## v0.8.2
 
 - The Launcher's picture in App Hub now updates from its repo like every other app's, so a new Launcher icon shows up straight away instead of the old one
