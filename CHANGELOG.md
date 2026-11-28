@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.8.1
+
+- The moving background holds still while Battery Saver is on, so it uses next to no power then. It still changes with what the app is doing
+
 ## v0.8.0
 
 - The background has a box for each update waiting or downloading, and a stack builds at the bottom as the downloads arrive
