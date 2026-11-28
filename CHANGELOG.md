@@ -1,5 +1,9 @@
 # Wonderdesk Apphub changelog
 
+## v0.8.4
+
+- Rows that scroll sideways (chips, filters, tabs) now fade at the edge where there is more, show a small arrow you can tap, and nudge once when first shown, so it is clear there is more to scroll to
+
 ## v0.8.3
 
 - More ? buttons: the settings that were not obvious now explain in a line or two what they do and why you might want them
